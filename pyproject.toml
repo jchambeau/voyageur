@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "voyageur"
+version = "0.1.0"
+description = "Sailing route planner for the Norman coast"
+authors = ["JC"]
+readme = "README.md"
+packages = [{include = "voyageur"}]
+
+[tool.poetry.dependencies]
+python = ">=3.11"
+typer = ">=0.12"
+pyproj = "^3.6"
+shapely = "^2.0"
+pyyaml = "^6.0.3"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0"
+ruff = ">=0.4"
+
+[tool.poetry.scripts]
+voyageur = "voyageur.cli.main:app"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 88
+exclude = ["main.py", "pytest.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["voyageur"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

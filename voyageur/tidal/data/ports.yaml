@@ -1,0 +1,31 @@
+ports:
+  Cherbourg:
+    lat: 49.6453
+    lon: -1.6222
+    flood_direction: 60.0
+    M2:
+      amplitude: 2.2
+      phase: 145.0
+    S2:
+      amplitude: 0.7
+      phase: 175.0
+  LeHavre:
+    lat: 49.4892
+    lon: 0.1080
+    flood_direction: 55.0
+    M2:
+      amplitude: 1.8
+      phase: 165.0
+    S2:
+      amplitude: 0.6
+      phase: 195.0
+  SaintMalo:
+    lat: 48.6490
+    lon: -1.9800
+    flood_direction: 75.0
+    M2:
+      amplitude: 2.5
+      phase: 130.0
+    S2:
+      amplitude: 0.8
+      phase: 160.0
