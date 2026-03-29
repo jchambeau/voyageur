@@ -56,3 +56,10 @@
 - `_fmt_dir_spd` produit 7 chars (au lieu de 8) pour speed < 10 kn : `f"{dir:3.0f}/{speed:.1f}"` → `" 90/5.0"` = 7 chars — désalignement cosmétique de la colonne WIND pour faibles vitesses ; contrainte 80 cols toujours respectée
 - `_fmt_sog` overflow théorique pour SOG ≥ 100 kn : `f"{sog:4.1f}kn"` → `"100.0kn"` = 7 chars — impossible en voilier (SOG réaliste < 20 kn) ; à corriger si extension à des embarcations rapides
 - `_elapsed` colonne TIME déborde à 6 chars pour routes > 99h : `f"{h:02d}:{m:02d}"` → `"168:00"` — désalignement cosmétique du header, contrainte 80 cols toujours respectée (max row = 58 chars) ; sans impact pour les routes normandie (< 24h)
+
+## Deferred from: code review of 2-4-cli-route-planning-command (2026-03-29)
+
+- `--step` non validé contre l'ensemble autorisé {1,5,15,30,60} — valeur quelconque acceptée silencieusement ; `step=0` pourrait causer un loop infini dans le planner (MAX_STEPS protège) ; à corriger avec `typer.Choice` ou validation explicite en Story 3.x
+- `_parse_wind` direction non bornée à [0, 360) : regex `^\d{1,3}/\d+` accepte "360/15" et "999/15" — le planner normalise via `% 360.0` donc pas de bug fonctionnel, mais entrée sémantiquement invalide acceptée sans avertissement
+- `_parse_position` coordonnées hors limites WGS84 acceptées ("91N/180E") — hors scope spec MVP, pyproj gère les dépassements en WGS84 sans crash ; à corriger si validation stricte des entrées géographiques requise
+- Tests CLI manquants : lat/lon input, --step invalide, boat.yaml absent/malformé — spec Story 2.4 demande 2 tests minimaux (satisfaits) ; couverture complète déférée à Story QA ultérieure
