@@ -30,13 +30,6 @@ _DEFAULT_BOAT = BoatProfile(
 )
 
 
-class _StubCartography:
-    """No-obstacle stub — replaced in Story 3.1 by GeoJsonCartography."""
-
-    def intersects_land(self, route: list[Waypoint]) -> bool:
-        """Always return False — obstacle detection deferred to Story 3.1."""
-        return False
-
 
 def _parse_position(s: str) -> tuple[float, float] | None:
     """Parse port name or latN/lonW string. Returns (lat, lon) or None."""
@@ -140,11 +133,13 @@ def plan(
             err=True,
         )
 
+    from voyageur.cartography.impl import GeoJsonCartography
     from voyageur.output.formatter import format_timeline
     from voyageur.routing.planner import RoutePlanner
     from voyageur.tidal.impl import HarmonicTidalModel
 
-    planner = RoutePlanner(tidal=HarmonicTidalModel(), cartography=_StubCartography())
+    cartography = GeoJsonCartography()
+    planner = RoutePlanner(tidal=HarmonicTidalModel(), cartography=cartography)
     route = planner.compute(
         origin=origin,
         destination=destination,
@@ -153,5 +148,22 @@ def plan(
         boat=boat,
         step_minutes=step,
     )
+
+    if cartography.intersects_land(route.waypoints):
+        pos_hint = ""
+        for a, b in zip(route.waypoints[:-1], route.waypoints[1:]):
+            if cartography.intersects_land([a, b]):
+                mid_lat = (a.lat + b.lat) / 2
+                mid_lon = (a.lon + b.lon) / 2
+                ew = "W" if mid_lon < 0 else "E"
+                pos_hint = (
+                    f" (approx. {mid_lat:.2f}°N/{abs(mid_lon):.2f}°{ew})"
+                )
+                break
+        typer.echo(
+            f"⚠ Route crosses land or shallow water{pos_hint}"
+            " — check your passage plan.",
+            err=True,
+        )
 
     typer.echo(format_timeline(route, wind=wind_condition))

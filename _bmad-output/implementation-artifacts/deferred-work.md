@@ -63,3 +63,9 @@
 - `_parse_wind` direction non bornée à [0, 360) : regex `^\d{1,3}/\d+` accepte "360/15" et "999/15" — le planner normalise via `% 360.0` donc pas de bug fonctionnel, mais entrée sémantiquement invalide acceptée sans avertissement
 - `_parse_position` coordonnées hors limites WGS84 acceptées ("91N/180E") — hors scope spec MVP, pyproj gère les dépassements en WGS84 sans crash ; à corriger si validation stricte des entrées géographiques requise
 - Tests CLI manquants : lat/lon input, --step invalide, boat.yaml absent/malformé — spec Story 2.4 demande 2 tests minimaux (satisfaits) ; couverture complète déférée à Story QA ultérieure
+
+## Deferred from: code review of 3-1-coastal-obstacle-detection (2026-03-29)
+
+- Faux positif shapely `intersects` au contact de frontière [impl.py:35] — `intersects` retourne True si la ligne touche seulement la frontière (sans la traverser) ; `crosses` éviterait ça mais exclurait les cas légitimes de contact ; limitation inhérente au prédicat, acceptable pour MVP
+- Faux négatif si waypoint entièrement à l'intérieur d'un polygone [impl.py:32] — si deux waypoints consécutifs sont tous les deux dans un polygone sans que le segment en croise la frontière, pas de détection ; correction = ajouter `polygon.contains(Point(lon, lat))` par waypoint ; hors scope MVP
+- Pas de polygones de hauts-fonds distincts dans normandy.geojson — spec dev notes reconnaît que les données sont simplifiées pour MVP (deux polygones côtiers approximatifs) ; données OSM précises avec hauts-fonds prévues en Story 4+
