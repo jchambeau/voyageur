@@ -38,3 +38,14 @@
 - `speed >= 0.0` pour flood vs spec `speed > 0` — comportement à vitesse exactement nulle (étale) non spécifié; sans impact fonctionnel
 - Tests fragiles si fixture `now` tombe sur un étale (speed = 0, direction indéfinie) — fixture fixe `2026-03-29 08:00 UTC` stable pour MVP; à re-vérifier si fixtures changent
 - ruff exclut `pytest.py` inexistant — héritage Story 1.1, à nettoyer lors d'un refactor pyproject.toml
+
+## Deferred from: code review of 2-2-direct-route-propagation-algorithm (2026-03-29)
+
+- 2000 waypoints identiques quand SOG=0 (vent debout + courant nul) — comportement voulu per AC4 (MAX_STEPS = limite de sécurité spécifiée) ; le test `test_zero_wind_zero_current_does_not_raise` valide que ça ne lève pas d'exception
+- Pas de signal de complétion pour distinguer route tronquée (MAX_STEPS) de route arrivée — changement de modèle `Route` (ajout d'un champ `reached_destination`) hors scope story 2.2 ; à considérer dans la couche output/CLI
+- `step_minutes=0` ou négatif accepté silencieusement (`step_sec=0` → distance nulle, temps figé) — validation = frontière CLI Story 2.4 (déjà dans deferred-work)
+- Waypoint d'arrivée final enregistre `heading` et `sog` de l'étape précédente (position avant avancement) — cosmétique pour MVP, impact négligeable sur la lisibilité de la timeline
+- `test_waypoint_timestamps_increment` vérifie `waypoints[:-1]` uniquement — le timestamp du waypoint d'arrivée n'est pas validé ; gap mineur de couverture AC2
+- Datetime naïf accepté en `departure_time` sans exception — pre-existing, validation = frontière CLI Story 2.4
+- `wind.speed` ou `current_speed` négatif non rejeté (inversion silencieuse du vecteur) — pre-existing, validation = frontière CLI/tidal
+- `CartographyProvider.intersects_land()` non appelé dans la boucle de propagation — intentionnel MVP ; Story 3.1 implémente la détection d'obstacle
