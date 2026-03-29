@@ -55,3 +55,4 @@
 - `_fmt_duration` utilise `int(td.total_seconds() / 60)` (division float avant truncation) — micro-précision, sans impact pratique pour des durées réalistes ; idiome plus sûr : `int(td.total_seconds()) // 60`
 - `_fmt_dir_spd` produit 7 chars (au lieu de 8) pour speed < 10 kn : `f"{dir:3.0f}/{speed:.1f}"` → `" 90/5.0"` = 7 chars — désalignement cosmétique de la colonne WIND pour faibles vitesses ; contrainte 80 cols toujours respectée
 - `_fmt_sog` overflow théorique pour SOG ≥ 100 kn : `f"{sog:4.1f}kn"` → `"100.0kn"` = 7 chars — impossible en voilier (SOG réaliste < 20 kn) ; à corriger si extension à des embarcations rapides
+- `_elapsed` colonne TIME déborde à 6 chars pour routes > 99h : `f"{h:02d}:{m:02d}"` → `"168:00"` — désalignement cosmétique du header, contrainte 80 cols toujours respectée (max row = 58 chars) ; sans impact pour les routes normandie (< 24h)

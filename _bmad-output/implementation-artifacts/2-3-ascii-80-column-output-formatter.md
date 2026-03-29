@@ -42,6 +42,7 @@ So that I can read my passage plan clearly without wrapping or truncation.
 - [x] [Review][Defer] `_fmt_duration` division float avant truncation [voyageur/output/formatter.py:68] — deferred, cosmétique
 - [x] [Review][Defer] `_fmt_dir_spd` colonne WIND = 7 chars pour speed < 10 kn [voyageur/output/formatter.py:52] — deferred, désalignement visuel mineur, contrainte 80 cols respectée
 - [x] [Review][Defer] `_fmt_sog` overflow théorique pour SOG ≥ 100 kn [voyageur/output/formatter.py:48] — deferred, impossible en voilier
+- [x] [Review][Defer] `_elapsed` colonne TIME = 6 chars pour routes > 99h [voyageur/output/formatter.py:17] — deferred, désalignement cosmétique, contrainte 80 cols respectée (max row 58 chars)
 
 ## Dev Notes
 
