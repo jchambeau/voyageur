@@ -22,6 +22,9 @@ class Waypoint:
     timestamp: datetime.datetime  # UTC timestamp for this step
     heading: float                # true heading in degrees [0, 360)
     speed_over_ground: float      # SOG in knots
+    tidal_current_speed: float = 0.0       # current speed in knots (Story 3.2)
+    tidal_current_direction: float = 0.0   # current direction in degrees (Story 3.2)
+    flagged: bool = False                  # safety threshold exceeded (Story 3.2)
 
 
 @dataclass(slots=True)
@@ -50,3 +53,12 @@ class Route:
     departure_time: datetime.datetime
     waypoints: list[Waypoint] = field(default_factory=list)
     total_duration: datetime.timedelta = field(default_factory=datetime.timedelta)
+
+
+@dataclass(slots=True)
+class SafetyThresholds:
+    """Safety threshold parameters for route evaluation."""
+
+    max_wind_kn: float | None = None
+    max_current_kn: float | None = None
+    max_dist_shelter_nm: float | None = None  # not implemented in MVP

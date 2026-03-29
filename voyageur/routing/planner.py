@@ -70,6 +70,9 @@ class RoutePlanner:
             current_lon, current_lat, destination[1], destination[0]
         )
         if init_dist <= ARRIVAL_TOLERANCE_M:
+            tidal_state = self._tidal.get_current(
+                current_lat, current_lon, current_time
+            )
             route.waypoints.append(
                 Waypoint(
                     lat=current_lat,
@@ -77,6 +80,8 @@ class RoutePlanner:
                     timestamp=current_time,
                     heading=0.0,
                     speed_over_ground=0.0,
+                    tidal_current_speed=tidal_state.current_speed,
+                    tidal_current_direction=tidal_state.current_direction,
                 )
             )
             route.total_duration = datetime.timedelta(0)
@@ -123,6 +128,8 @@ class RoutePlanner:
                     timestamp=current_time,
                     heading=heading,
                     speed_over_ground=sog,
+                    tidal_current_speed=tidal_state.current_speed,
+                    tidal_current_direction=tidal_state.current_direction,
                 )
             )
 
@@ -147,6 +154,8 @@ class RoutePlanner:
                         timestamp=current_time,
                         heading=heading,
                         speed_over_ground=sog,
+                        tidal_current_speed=tidal_state.current_speed,
+                        tidal_current_direction=tidal_state.current_direction,
                     )
                 )
                 break

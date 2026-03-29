@@ -3,7 +3,7 @@ import re
 
 import typer
 
-from voyageur.models import BoatProfile, Waypoint, WindCondition
+from voyageur.models import BoatProfile, SafetyThresholds, Waypoint, WindCondition
 
 app = typer.Typer(
     name="voyageur",
@@ -67,19 +67,27 @@ def _parse_depart(s: str) -> datetime.datetime | None:
         return None
 
 
-def _load_boat() -> tuple[BoatProfile, bool]:
-    """Load boat profile from ~/.voyageur/boat.yaml. Returns (profile, loaded)."""
+def _load_boat() -> tuple[BoatProfile, bool, dict[str, float]]:
+    """Load boat profile from ~/.voyageur/boat.yaml.
+
+    Returns (profile, loaded, thresholds_dict).
+    thresholds_dict may contain 'max_wind_kn' and/or 'max_current_kn'.
+    """
     import pathlib
 
     import yaml as _yaml
 
     path = pathlib.Path.home() / ".voyageur" / "boat.yaml"
     if not path.exists():
-        return _DEFAULT_BOAT, False
+        return _DEFAULT_BOAT, False, {}
     try:
         data = _yaml.safe_load(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError("boat.yaml is empty or not a YAML mapping")
+        thresholds: dict[str, float] = {}
+        for key in ("max_wind_kn", "max_current_kn"):
+            if key in data:
+                thresholds[key] = float(data[key])
         return (
             BoatProfile(
                 name=data.get("name", "Default"),
@@ -89,9 +97,10 @@ def _load_boat() -> tuple[BoatProfile, bool]:
                 default_step=int(data.get("default_step", 15)),
             ),
             True,
+            thresholds,
         )
     except (KeyError, TypeError, ValueError, OSError, _yaml.YAMLError):
-        return _DEFAULT_BOAT, False
+        return _DEFAULT_BOAT, False, {}
 
 
 @app.command()
@@ -101,6 +110,13 @@ def plan(
     depart: str = typer.Option(..., "--depart", help="Departure time (ISO 8601)"),
     wind: str = typer.Option(..., "--wind", help="Wind direction/speed (e.g. 240/15)"),
     step: int = typer.Option(15, "--step", help="Time step in minutes (1,5,15,30,60)"),
+    max_wind: float | None = typer.Option(None, "--max-wind", help="Max wind speed (kn)"),
+    max_current: float | None = typer.Option(
+        None, "--max-current", help="Max tidal current speed (kn)"
+    ),
+    max_dist_shelter: float | None = typer.Option(
+        None, "--max-dist-shelter", help="Max distance from shelter (NM)"
+    ),
 ) -> None:
     """Plan a sailing passage between two Norman coast ports."""
     departure_time = _parse_depart(depart)
@@ -126,16 +142,34 @@ def plan(
         )
         raise typer.Exit(1)
 
-    boat, loaded = _load_boat()
+    boat, loaded, boat_thresholds = _load_boat()
     if not loaded:
         typer.echo(
             "⚠ No boat profile found at ~/.voyageur/boat.yaml — using defaults.",
             err=True,
         )
 
+    if max_dist_shelter is not None:
+        typer.echo(
+            "⚠ --max-dist-shelter not yet implemented — shelter data unavailable.",
+            err=True,
+        )
+
+    thresholds = SafetyThresholds(
+        max_wind_kn=(
+            max_wind if max_wind is not None
+            else boat_thresholds.get("max_wind_kn")
+        ),
+        max_current_kn=(
+            max_current if max_current is not None
+            else boat_thresholds.get("max_current_kn")
+        ),
+    )
+
     from voyageur.cartography.impl import GeoJsonCartography
     from voyageur.output.formatter import format_timeline
     from voyageur.routing.planner import RoutePlanner
+    from voyageur.routing.safety import evaluate_route
     from voyageur.tidal.impl import HarmonicTidalModel
 
     cartography = GeoJsonCartography()
@@ -148,6 +182,14 @@ def plan(
         boat=boat,
         step_minutes=step,
     )
+
+    flag_count = evaluate_route(route, wind_condition, thresholds)
+    if flag_count > 0 and flag_count == len(route.waypoints):
+        typer.echo(
+            "✗ No viable conditions — all segments exceed safety thresholds.",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     if cartography.intersects_land(route.waypoints):
         pos_hint = ""

@@ -75,16 +75,22 @@ def format_timeline(route: Route, wind: WindCondition | None = None) -> str:
         lon = _fmt_lon(wp.lon)
         hdg = _fmt_hdg(wp.heading)
         sog = _fmt_sog(wp.speed_over_ground)
-        tide = "---/---"
+        tide = _fmt_dir_spd(wp.tidal_current_direction, wp.tidal_current_speed)
         if wind is not None:
             wind_col = _fmt_dir_spd(wind.direction, wind.speed)
         else:
             wind_col = "---/---"
         row = SEP.join([elapsed, lat, lon, hdg, sog, tide, wind_col])
+        if wp.flagged:
+            row = row + "  \u26a0"
         lines.append(row)
     lines.append(DIVIDER)
 
     dist_nm = _total_distance_nm(route.waypoints)
     duration_str = _fmt_duration(route.total_duration)
-    lines.append(f"Total: {dist_nm:.1f} NM  |  Duration: {duration_str}  |  Flags: 0")
+    flag_count = sum(1 for wp in route.waypoints if wp.flagged)
+    lines.append(
+        f"Total: {dist_nm:.1f} NM  |  Duration: {duration_str}"
+        f"  |  Flags: {flag_count}"
+    )
     return "\n".join(lines)

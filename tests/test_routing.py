@@ -4,8 +4,9 @@ import time
 
 import pytest
 
-from voyageur.models import BoatProfile, Route, WindCondition
+from voyageur.models import BoatProfile, Route, SafetyThresholds, WindCondition
 from voyageur.routing.planner import MAX_STEPS, RoutePlanner
+from voyageur.routing.safety import evaluate_route
 
 # Reference port coordinates (lat, lon)
 CHERBOURG = (49.6453, -1.6222)
@@ -250,3 +251,75 @@ def test_nonzero_tidal_current_affects_sog(mock_tidal, mock_cartography, boat, n
     assert sog_no_tide != sog_with_tide, (
         f"Tidal had no effect on SOG: both = {sog_no_tide:.3f} kn"
     )
+
+
+# ---------------------------------------------------------------------------
+# Safety threshold evaluation — Story 3.2
+# ---------------------------------------------------------------------------
+
+
+def test_safety_flags_exceed_wind(mock_tidal, mock_cartography, boat, now):
+    """Wind=15 kn > max_wind=10 kn → tous waypoints flagués."""
+    planner = RoutePlanner(tidal=mock_tidal, cartography=mock_cartography)
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    route = planner.compute(
+        origin=CHERBOURG, destination=GRANVILLE,
+        departure_time=now, wind=wind, boat=boat,
+    )
+    thresholds = SafetyThresholds(max_wind_kn=10.0)
+    count = evaluate_route(route, wind, thresholds)
+    assert count == len(route.waypoints)
+    assert all(wp.flagged for wp in route.waypoints)
+
+
+def test_safety_no_flags_within_thresholds(mock_tidal, mock_cartography, boat, now):
+    """Wind=15 kn < max_wind=20 kn → aucun waypoint flagué."""
+    planner = RoutePlanner(tidal=mock_tidal, cartography=mock_cartography)
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    route = planner.compute(
+        origin=CHERBOURG, destination=GRANVILLE,
+        departure_time=now, wind=wind, boat=boat,
+    )
+    thresholds = SafetyThresholds(max_wind_kn=20.0)
+    count = evaluate_route(route, wind, thresholds)
+    assert count == 0
+    assert not any(wp.flagged for wp in route.waypoints)
+
+
+def test_safety_flags_exceed_current(mock_cartography, boat, now):
+    """Courant=3 kn > max_current=2 kn → tous waypoints flagués."""
+    from voyageur.models import TidalState
+
+    class _HighCurrentTidal:
+        def get_current(
+            self, lat: float, lon: float, at: datetime.datetime
+        ) -> TidalState:
+            return TidalState(
+                timestamp=at,
+                current_direction=90.0,
+                current_speed=3.0,
+                water_height=0.0,
+            )
+
+    planner = RoutePlanner(tidal=_HighCurrentTidal(), cartography=mock_cartography)
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    route = planner.compute(
+        origin=CHERBOURG, destination=GRANVILLE,
+        departure_time=now, wind=wind, boat=boat,
+    )
+    thresholds = SafetyThresholds(max_current_kn=2.0)
+    count = evaluate_route(route, wind, thresholds)
+    assert count == len(route.waypoints)
+
+
+def test_safety_no_thresholds_no_flags(mock_tidal, mock_cartography, boat, now):
+    """Sans seuils définis → aucun waypoint flagué."""
+    planner = RoutePlanner(tidal=mock_tidal, cartography=mock_cartography)
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    route = planner.compute(
+        origin=CHERBOURG, destination=GRANVILLE,
+        departure_time=now, wind=wind, boat=boat,
+    )
+    thresholds = SafetyThresholds()
+    count = evaluate_route(route, wind, thresholds)
+    assert count == 0
