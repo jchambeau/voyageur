@@ -49,3 +49,9 @@
 - Datetime naïf accepté en `departure_time` sans exception — pre-existing, validation = frontière CLI Story 2.4
 - `wind.speed` ou `current_speed` négatif non rejeté (inversion silencieuse du vecteur) — pre-existing, validation = frontière CLI/tidal
 - `CartographyProvider.intersects_land()` non appelé dans la boucle de propagation — intentionnel MVP ; Story 3.1 implémente la détection d'obstacle
+
+## Deferred from: code review of 2-3-ascii-80-column-output-formatter (2026-03-29)
+
+- `_fmt_duration` utilise `int(td.total_seconds() / 60)` (division float avant truncation) — micro-précision, sans impact pratique pour des durées réalistes ; idiome plus sûr : `int(td.total_seconds()) // 60`
+- `_fmt_dir_spd` produit 7 chars (au lieu de 8) pour speed < 10 kn : `f"{dir:3.0f}/{speed:.1f}"` → `" 90/5.0"` = 7 chars — désalignement cosmétique de la colonne WIND pour faibles vitesses ; contrainte 80 cols toujours respectée
+- `_fmt_sog` overflow théorique pour SOG ≥ 100 kn : `f"{sog:4.1f}kn"` → `"100.0kn"` = 7 chars — impossible en voilier (SOG réaliste < 20 kn) ; à corriger si extension à des embarcations rapides
