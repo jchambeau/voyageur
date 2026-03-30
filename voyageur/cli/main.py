@@ -1,8 +1,10 @@
+import dataclasses
 import datetime
 import re
 
 import typer
 
+from voyageur.cli.config import config_app
 from voyageur.models import BoatProfile, SafetyThresholds, Waypoint, WindCondition
 
 app = typer.Typer(
@@ -10,6 +12,7 @@ app = typer.Typer(
     help="Sailing route planner for the Norman coast.",
     no_args_is_help=True,
 )
+app.add_typer(config_app, name="config")
 
 PORTS: dict[str, tuple[float, float]] = {
     "cherbourg":             (49.6453, -1.6222),
@@ -117,6 +120,9 @@ def plan(
     max_dist_shelter: float | None = typer.Option(
         None, "--max-dist-shelter", help="Max distance from shelter (NM)"
     ),
+    draft: float | None = typer.Option(
+        None, "--draft", help="Override saved boat draft (m)", min=0.0
+    ),
 ) -> None:
     """Plan a sailing passage between two Norman coast ports."""
     departure_time = _parse_depart(depart)
@@ -143,6 +149,8 @@ def plan(
         raise typer.Exit(1)
 
     boat, loaded, boat_thresholds = _load_boat()
+    if draft is not None:
+        boat = dataclasses.replace(boat, draft=draft)
     if not loaded:
         typer.echo(
             "⚠ No boat profile found at ~/.voyageur/boat.yaml — using defaults.",

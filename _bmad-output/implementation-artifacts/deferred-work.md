@@ -79,3 +79,11 @@
 - Pas d'alerte stderr pour flags partiels [cli/main.py] — UX : si N < total waypoints sont flagués, aucun message explicite n'est émis au-delà du ⚠ inline et du footer "Flags: N" ; amélioration UX hors scope
 - Mutation `evaluate_route` sans option immutable [routing/safety.py] — documenté dans docstring ; unique appelant en CLI ; mode copy-on-eval = amélioration future si evaluate_route est réutilisé en dehors du CLI
 - Route origin=dest flaguée → Exit(1) quand 1 waypoint + threshold dépassé — correct per AC4 ; comportement surprenant mais spec-correct
+
+## Deferred from: code review of 3-3-boat-profile-management (2026-03-30)
+
+- `min=0.0` accepte loa/draft/sail_area=0 [cli/config.py] — pre-existing : _load_boat accepte aussi ces valeurs depuis YAML ; validation métier (loa > 0) hors scope MVP
+- YAML corrompu → _load_existing retourne {} → merge silencieux avec défauts codés en dur [cli/config.py] — comportement intentionnel pour mises à jour partielles ; avertissement utilisateur = amélioration UX future
+- `_build_profile` dead code avec KeyError non gardé [cli/config.py] — non appelé en production ; à supprimer ou protéger si utilisé dans Story 3.x
+- `ctx.invoked_subcommand` guard unreachable [cli/config.py] — config_app n'a pas de sous-commandes ; code défensif inoffensif
+- Race TOCTOU entre exists() et read_text() dans --show [cli/config.py] — pattern identique dans _load_boat ; scénario pathologique, hors scope MVP

@@ -29,7 +29,7 @@ def test_cli_main_importable() -> None:
 
 
 def test_cli_help_output() -> None:
-    """The CLI --help exits 0 and mentions voyageur."""
+    """The CLI --help exits 0; plan subcommand help contains --from and --to."""
     from typer.testing import CliRunner
 
     from voyageur.cli.main import app
@@ -37,5 +37,10 @@ def test_cli_help_output() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "--from" in result.output
-    assert "--to" in result.output
+    assert "plan" in result.output
+    assert "config" in result.output
+
+    result_plan = runner.invoke(app, ["plan", "--help"])
+    assert result_plan.exit_code == 0
+    assert "--from" in result_plan.output
+    assert "--to" in result_plan.output
