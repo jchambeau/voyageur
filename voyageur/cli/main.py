@@ -188,12 +188,12 @@ def plan(
 
     from voyageur.cartography.impl import GeoJsonCartography
     from voyageur.output.formatter import format_timeline
-    from voyageur.routing.planner import RoutePlanner
+    from voyageur.routing.isochrone import IsochroneRoutePlanner
     from voyageur.routing.safety import evaluate_route
     from voyageur.tidal.impl import HarmonicTidalModel
 
     cartography = GeoJsonCartography()
-    planner = RoutePlanner(tidal=HarmonicTidalModel(), cartography=cartography)
+    planner = IsochroneRoutePlanner(tidal=HarmonicTidalModel(), cartography=cartography)
     route = planner.compute(
         origin=origin,
         destination=destination,

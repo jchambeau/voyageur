@@ -1,10 +1,11 @@
-"""Tests for RoutePlanner — Story 2.2."""
+"""Tests for RoutePlanner — Story 2.2, IsochroneRoutePlanner — Story 4.1."""
 import datetime
 import time
 
 import pytest
 
 from voyageur.models import BoatProfile, Route, SafetyThresholds, WindCondition
+from voyageur.routing.isochrone import IsochroneRoutePlanner
 from voyageur.routing.planner import MAX_STEPS, RoutePlanner
 from voyageur.routing.safety import evaluate_route
 
@@ -348,6 +349,66 @@ def test_safety_partial_current_flags(mock_cartography, boat, now):
     )
     assert route.waypoints[0].flagged
     assert not route.waypoints[-1].flagged
+
+
+# ---------------------------------------------------------------------------
+# IsochroneRoutePlanner — Story 4.1
+# ---------------------------------------------------------------------------
+
+
+def test_isochrone_clear_route_unchanged(mock_tidal, mock_cartography, boat, now):
+    """Sans obstacle : IsochroneRoutePlanner = RoutePlanner."""
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    direct = RoutePlanner(tidal=mock_tidal, cartography=mock_cartography).compute(
+        origin=CHERBOURG,
+        destination=GRANVILLE,
+        departure_time=now,
+        wind=wind,
+        boat=boat,
+        step_minutes=15,
+    )
+    iso = IsochroneRoutePlanner(
+        tidal=mock_tidal, cartography=mock_cartography
+    ).compute(
+        origin=CHERBOURG,
+        destination=GRANVILLE,
+        departure_time=now,
+        wind=wind,
+        boat=boat,
+        step_minutes=15,
+    )
+    assert len(iso.waypoints) == len(direct.waypoints)
+    assert iso.waypoints[0].lat == pytest.approx(direct.waypoints[0].lat)
+    assert iso.waypoints[0].lon == pytest.approx(direct.waypoints[0].lon)
+    assert iso.waypoints[-1].lat == pytest.approx(direct.waypoints[-1].lat, abs=0.01)
+    assert iso.waypoints[-1].lon == pytest.approx(direct.waypoints[-1].lon, abs=0.01)
+
+
+def test_isochrone_avoids_obstacle(mock_tidal, boat, now):
+    """Bearing direct bloqué → beam search dévie vers le premier heading libre."""
+    # Bloquer le premier appel (offset=0, bearing direct pour étape 1)
+    # → le beam search passe à offset=+15° et prend ce heading
+    responses = iter([True, False])  # premier appel bloqué, tous les suivants libres
+
+    class _BlockFirstSegment:
+        def intersects_land(self, route):
+            return next(responses, False)
+
+    carto = _BlockFirstSegment()
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    route = IsochroneRoutePlanner(tidal=mock_tidal, cartography=carto).compute(
+        origin=CHERBOURG,
+        destination=GRANVILLE,
+        departure_time=now,
+        wind=wind,
+        boat=boat,
+        step_minutes=15,
+    )
+    assert len(route.waypoints) >= 2
+    assert route.total_duration > datetime.timedelta(0)
+    # heading[0] doit être dévié de +15° du bearing direct (premier offset libre)
+    # bearing Cherbourg→Granville ≈ 178° → heading dévié ≈ 193°
+    assert abs(route.waypoints[0].heading - 178.0) > 5.0
 
 
 def test_safety_no_thresholds_no_flags(mock_tidal, mock_cartography, boat, now):
