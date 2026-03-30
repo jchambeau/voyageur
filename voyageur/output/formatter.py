@@ -61,7 +61,7 @@ def _total_distance_nm(waypoints: list[Waypoint]) -> float:
 
 def _fmt_duration(td: datetime.timedelta) -> str:
     """Format timedelta as 'Xh Ym'."""
-    total_min = int(td.total_seconds() / 60)
+    total_min = int(td.total_seconds()) // 60
     h, m = divmod(total_min, 60)
     return f"{h}h {m:02d}m"
 

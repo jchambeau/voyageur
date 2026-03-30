@@ -5,7 +5,7 @@ import re
 import typer
 
 from voyageur.cli.config import config_app
-from voyageur.models import BoatProfile, SafetyThresholds, Waypoint, WindCondition
+from voyageur.models import BoatProfile, SafetyThresholds, WindCondition
 
 app = typer.Typer(
     name="voyageur",
@@ -52,9 +52,12 @@ def _parse_wind(s: str, timestamp: datetime.datetime) -> WindCondition | None:
     if not _WIND_RE.match(s.strip()):
         return None
     parts = s.strip().split("/")
+    direction = float(parts[0])
+    if direction >= 360.0:
+        return None
     return WindCondition(
         timestamp=timestamp,
-        direction=float(parts[0]),
+        direction=direction,
         speed=float(parts[1]),
     )
 
@@ -113,7 +116,9 @@ def plan(
     depart: str = typer.Option(..., "--depart", help="Departure time (ISO 8601)"),
     wind: str = typer.Option(..., "--wind", help="Wind direction/speed (e.g. 240/15)"),
     step: int = typer.Option(15, "--step", help="Time step in minutes (1,5,15,30,60)"),
-    max_wind: float | None = typer.Option(None, "--max-wind", help="Max wind speed (kn)", min=0.0),
+    max_wind: float | None = typer.Option(
+        None, "--max-wind", help="Max wind speed (kn)", min=0.0
+    ),
     max_current: float | None = typer.Option(
         None, "--max-current", help="Max tidal current speed (kn)", min=0.0
     ),
@@ -138,6 +143,13 @@ def plan(
     destination = _parse_position(to_port)
     if destination is None:
         typer.echo(f"✗ Unknown port or invalid position: {to_port!r}", err=True)
+        raise typer.Exit(1)
+
+    if step not in (1, 5, 15, 30, 60):
+        typer.echo(
+            f"✗ --step must be one of 1, 5, 15, 30, 60 (got {step})",
+            err=True,
+        )
         raise typer.Exit(1)
 
     wind_condition = _parse_wind(wind, departure_time)

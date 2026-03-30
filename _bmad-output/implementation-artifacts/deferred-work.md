@@ -37,7 +37,7 @@
 - Absence de validation de schéma YAML (`KeyError` sur clé manquante dans ports.yaml) — `ports.yaml` embarqué sous contrôle développeur; schema validation = sur-ingénierie pour MVP
 - `speed >= 0.0` pour flood vs spec `speed > 0` — comportement à vitesse exactement nulle (étale) non spécifié; sans impact fonctionnel
 - Tests fragiles si fixture `now` tombe sur un étale (speed = 0, direction indéfinie) — fixture fixe `2026-03-29 08:00 UTC` stable pour MVP; à re-vérifier si fixtures changent
-- ruff exclut `pytest.py` inexistant — héritage Story 1.1, à nettoyer lors d'un refactor pyproject.toml
+- ~~ruff exclut `pytest.py` inexistant~~ — **FIXED** (nettoyage post-MVP, les deux exclusions `main.py` et `pytest.py` supprimées)
 
 ## Deferred from: code review of 2-2-direct-route-propagation-algorithm (2026-03-29)
 
@@ -52,15 +52,15 @@
 
 ## Deferred from: code review of 2-3-ascii-80-column-output-formatter (2026-03-29)
 
-- `_fmt_duration` utilise `int(td.total_seconds() / 60)` (division float avant truncation) — micro-précision, sans impact pratique pour des durées réalistes ; idiome plus sûr : `int(td.total_seconds()) // 60`
+- ~~`_fmt_duration` utilise `int(td.total_seconds() / 60)`~~ — **FIXED** (`int(td.total_seconds()) // 60`)
 - `_fmt_dir_spd` produit 7 chars (au lieu de 8) pour speed < 10 kn : `f"{dir:3.0f}/{speed:.1f}"` → `" 90/5.0"` = 7 chars — désalignement cosmétique de la colonne WIND pour faibles vitesses ; contrainte 80 cols toujours respectée
 - `_fmt_sog` overflow théorique pour SOG ≥ 100 kn : `f"{sog:4.1f}kn"` → `"100.0kn"` = 7 chars — impossible en voilier (SOG réaliste < 20 kn) ; à corriger si extension à des embarcations rapides
 - `_elapsed` colonne TIME déborde à 6 chars pour routes > 99h : `f"{h:02d}:{m:02d}"` → `"168:00"` — désalignement cosmétique du header, contrainte 80 cols toujours respectée (max row = 58 chars) ; sans impact pour les routes normandie (< 24h)
 
 ## Deferred from: code review of 2-4-cli-route-planning-command (2026-03-29)
 
-- `--step` non validé contre l'ensemble autorisé {1,5,15,30,60} — valeur quelconque acceptée silencieusement ; `step=0` pourrait causer un loop infini dans le planner (MAX_STEPS protège) ; à corriger avec `typer.Choice` ou validation explicite en Story 3.x
-- `_parse_wind` direction non bornée à [0, 360) : regex `^\d{1,3}/\d+` accepte "360/15" et "999/15" — le planner normalise via `% 360.0` donc pas de bug fonctionnel, mais entrée sémantiquement invalide acceptée sans avertissement
+- ~~`--step` non validé contre l'ensemble autorisé {1,5,15,30,60}~~ — **FIXED** (validation explicite `if step not in (1,5,15,30,60)` + Exit(1))
+- ~~`_parse_wind` direction non bornée à [0, 360)~~ — **FIXED** (`direction >= 360.0` → return None → erreur utilisateur)
 - `_parse_position` coordonnées hors limites WGS84 acceptées ("91N/180E") — hors scope spec MVP, pyproj gère les dépassements en WGS84 sans crash ; à corriger si validation stricte des entrées géographiques requise
 - Tests CLI manquants : lat/lon input, --step invalide, boat.yaml absent/malformé — spec Story 2.4 demande 2 tests minimaux (satisfaits) ; couverture complète déférée à Story QA ultérieure
 
@@ -84,6 +84,6 @@
 
 - `min=0.0` accepte loa/draft/sail_area=0 [cli/config.py] — pre-existing : _load_boat accepte aussi ces valeurs depuis YAML ; validation métier (loa > 0) hors scope MVP
 - YAML corrompu → _load_existing retourne {} → merge silencieux avec défauts codés en dur [cli/config.py] — comportement intentionnel pour mises à jour partielles ; avertissement utilisateur = amélioration UX future
-- `_build_profile` dead code avec KeyError non gardé [cli/config.py] — non appelé en production ; à supprimer ou protéger si utilisé dans Story 3.x
-- `ctx.invoked_subcommand` guard unreachable [cli/config.py] — config_app n'a pas de sous-commandes ; code défensif inoffensif
+- ~~`_build_profile` dead code avec KeyError non gardé [cli/config.py]~~ — **FIXED** (supprimé, import `BoatProfile` retiré)
+- ~~`ctx.invoked_subcommand` guard unreachable [cli/config.py]~~ — **FIXED** (supprimé, paramètre `ctx` retiré)
 - Race TOCTOU entre exists() et read_text() dans --show [cli/config.py] — pattern identique dans _load_boat ; scénario pathologique, hors scope MVP

@@ -3,8 +3,6 @@ import pathlib
 import typer
 import yaml
 
-from voyageur.models import BoatProfile
-
 config_app = typer.Typer(
     name="config", help="Manage saved boat profile.", invoke_without_command=True
 )
@@ -28,7 +26,6 @@ def _load_existing() -> dict:
 
 @config_app.callback()
 def manage(
-    ctx: typer.Context,
     name: str | None = typer.Option(None, "--name", help="Boat name"),
     loa: float | None = typer.Option(None, "--loa", help="Length overall (m)", min=0.0),
     draft: float | None = typer.Option(None, "--draft", help="Draft (m)", min=0.0),
@@ -41,9 +38,6 @@ def manage(
     show: bool = typer.Option(False, "--show", help="Display saved profile"),
 ) -> None:
     """Create or update the persistent boat profile."""
-    if ctx.invoked_subcommand is not None:
-        return
-
     if show:
         path = _profile_path()
         if not path.exists():
@@ -78,14 +72,3 @@ def manage(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.dump(merged, default_flow_style=False), encoding="utf-8")
     typer.echo(f"✓ Profile saved to {path}")
-
-
-def _build_profile(data: dict) -> BoatProfile:
-    """Build a BoatProfile from a YAML data dict (used by main.py)."""
-    return BoatProfile(
-        name=data.get("name", "Default"),
-        loa=float(data["loa"]),
-        draft=float(data["draft"]),
-        sail_area=float(data["sail_area"]),
-        default_step=int(data.get("default_step", 15)),
-    )
