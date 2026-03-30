@@ -128,6 +128,11 @@ def plan(
     draft: float | None = typer.Option(
         None, "--draft", help="Override saved boat draft (m)", min=0.0
     ),
+    criteria: str | None = typer.Option(
+        None,
+        "--criteria",
+        help="Route criteria: fastest,comfort,shelter,traffic or all",
+    ),
 ) -> None:
     """Plan a sailing passage between two Norman coast ports."""
     departure_time = _parse_depart(depart)
@@ -187,45 +192,90 @@ def plan(
     )
 
     from voyageur.cartography.impl import GeoJsonCartography
-    from voyageur.output.formatter import format_timeline
+    from voyageur.output.formatter import format_multi_criteria, format_timeline
     from voyageur.routing.isochrone import IsochroneRoutePlanner
+    from voyageur.routing.multi import CRITERIA as _ALL_CRITERIA
+    from voyageur.routing.multi import MultiCriteriaRoutePlanner
     from voyageur.routing.safety import evaluate_route
     from voyageur.tidal.impl import HarmonicTidalModel
 
+    # Parse --criteria option.
+    criteria_list: list[str] | None = None
+    if criteria is not None:
+        raw = (
+            list(_ALL_CRITERIA)
+            if criteria.strip() == "all"
+            else [c.strip() for c in criteria.split(",")]
+        )
+        invalid = [c for c in raw if c not in _ALL_CRITERIA]
+        if invalid:
+            typer.echo(
+                f"✗ Unknown criteria: {', '.join(invalid)}."
+                f" Valid: {', '.join(_ALL_CRITERIA)}",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if "traffic" in raw:
+            typer.echo(
+                "⚠ traffic: no shipping lane data — falls back to fastest",
+                err=True,
+            )
+        criteria_list = raw
+
     cartography = GeoJsonCartography()
-    planner = IsochroneRoutePlanner(tidal=HarmonicTidalModel(), cartography=cartography)
-    route = planner.compute(
-        origin=origin,
-        destination=destination,
-        departure_time=departure_time,
-        wind=wind_condition,
-        boat=boat,
-        step_minutes=step,
-    )
+    tidal = HarmonicTidalModel()
 
-    flag_count = evaluate_route(route, wind_condition, thresholds)
-    if flag_count > 0 and flag_count == len(route.waypoints):
-        typer.echo(
-            "✗ No viable conditions — all segments exceed safety thresholds.",
-            err=True,
+    if criteria_list is not None:
+        multi = MultiCriteriaRoutePlanner(tidal=tidal, cartography=cartography)
+        results = multi.compute_all(
+            origin=origin,
+            destination=destination,
+            departure_time=departure_time,
+            wind=wind_condition,
+            boat=boat,
+            step_minutes=step,
+            criteria=criteria_list,
         )
-        raise typer.Exit(1)
-
-    if cartography.intersects_land(route.waypoints):
-        pos_hint = ""
-        for a, b in zip(route.waypoints[:-1], route.waypoints[1:]):
-            if cartography.intersects_land([a, b]):
-                mid_lat = (a.lat + b.lat) / 2
-                mid_lon = (a.lon + b.lon) / 2
-                ew = "W" if mid_lon < 0 else "E"
-                pos_hint = (
-                    f" (approx. {mid_lat:.2f}°N/{abs(mid_lon):.2f}°{ew})"
-                )
-                break
-        typer.echo(
-            f"⚠ Route crosses land or shallow water{pos_hint}"
-            " — check your passage plan.",
-            err=True,
+        first_route = next(iter(results.values()))
+        flag_count = evaluate_route(first_route, wind_condition, thresholds)
+        if flag_count > 0 and flag_count == len(first_route.waypoints):
+            typer.echo(
+                "✗ No viable conditions — all segments exceed safety thresholds.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        typer.echo(format_multi_criteria(results, wind=wind_condition))
+    else:
+        planner = IsochroneRoutePlanner(tidal=tidal, cartography=cartography)
+        route = planner.compute(
+            origin=origin,
+            destination=destination,
+            departure_time=departure_time,
+            wind=wind_condition,
+            boat=boat,
+            step_minutes=step,
         )
-
-    typer.echo(format_timeline(route, wind=wind_condition))
+        flag_count = evaluate_route(route, wind_condition, thresholds)
+        if flag_count > 0 and flag_count == len(route.waypoints):
+            typer.echo(
+                "✗ No viable conditions — all segments exceed safety thresholds.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if cartography.intersects_land(route.waypoints):
+            pos_hint = ""
+            for a, b in zip(route.waypoints[:-1], route.waypoints[1:]):
+                if cartography.intersects_land([a, b]):
+                    mid_lat = (a.lat + b.lat) / 2
+                    mid_lon = (a.lon + b.lon) / 2
+                    ew = "W" if mid_lon < 0 else "E"
+                    pos_hint = (
+                        f" (approx. {mid_lat:.2f}°N/{abs(mid_lon):.2f}°{ew})"
+                    )
+                    break
+            typer.echo(
+                f"⚠ Route crosses land or shallow water{pos_hint}"
+                " — check your passage plan.",
+                err=True,
+            )
+        typer.echo(format_timeline(route, wind=wind_condition))

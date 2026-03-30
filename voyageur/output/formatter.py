@@ -66,6 +66,18 @@ def _fmt_duration(td: datetime.timedelta) -> str:
     return f"{h}h {m:02d}m"
 
 
+def format_multi_criteria(
+    results: dict[str, Route],
+    wind: WindCondition | None = None,
+) -> str:
+    """Format multiple routes, one labelled section per criterion."""
+    sections = []
+    for label, route in results.items():
+        header = f"=== {label.upper()} ==="
+        sections.append(header + "\n" + format_timeline(route, wind))
+    return "\n\n".join(sections)
+
+
 def format_timeline(route: Route, wind: WindCondition | None = None) -> str:
     """Format a computed route as an 80-column ASCII timeline table."""
     lines: list[str] = [HEADER, DIVIDER]

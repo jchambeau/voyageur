@@ -1,6 +1,6 @@
 # Story 4.2: Multi-Criteria Route Computation
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -20,38 +20,38 @@ so that I can choose the route that best fits conditions and my preferences for 
 
 ## Tasks / Subtasks
 
-- [ ] Créer `voyageur/routing/multi.py` — `MultiCriteriaRoutePlanner` (AC: 1, 2, 3, 4, 5)
-  - [ ] Même structure de boucle que `IsochroneRoutePlanner` mais collecte TOUS les headings viables (ne break pas au premier)
-  - [ ] `_score_heading(viable, direct_bearing, wind, current_lat, current_lon, criterion, distance_m)` — sélectionne le meilleur heading selon le critère
-  - [ ] Critère `fastest` : `min(viable, key=lambda h: abs((h - direct_bearing + 180) % 360 - 180))`
-  - [ ] Critère `comfort` : `min(viable, key=lambda h: abs(_twa(wind.direction, h) - 90.0))`
-  - [ ] Critère `shelter` : `min(viable, key=lambda h: _shelter_dist(h, current_lat, current_lon, distance_m))`
-  - [ ] Critère `traffic` : identique à `fastest` (stub documenté — pas de données shipping lanes)
-  - [ ] `compute_all(criteria, origin, destination, departure_time, wind, boat, step_minutes) -> dict[str, Route]`
-  - [ ] Constante `CRITERIA = ("fastest", "comfort", "shelter", "traffic")`
-  - [ ] Constante `HARBOURS: dict[str, tuple[float, float]]` — copie des ports normands (voir ci-dessous)
+- [x] Créer `voyageur/routing/multi.py` — `MultiCriteriaRoutePlanner` (AC: 1, 2, 3, 4, 5)
+  - [x] Même structure de boucle que `IsochroneRoutePlanner` mais collecte TOUS les headings viables (ne break pas au premier)
+  - [x] `_score_heading(viable, direct_bearing, wind, current_lat, current_lon, criterion, distance_m)` — sélectionne le meilleur heading selon le critère
+  - [x] Critère `fastest` : `min(viable, key=lambda h: abs((h - direct_bearing + 180) % 360 - 180))`
+  - [x] Critère `comfort` : `min(viable, key=lambda h: abs(_twa(wind.direction, h) - 90.0))`
+  - [x] Critère `shelter` : `min(viable, key=lambda h: _shelter_dist(h, current_lat, current_lon, distance_m))`
+  - [x] Critère `traffic` : identique à `fastest` (stub documenté — pas de données shipping lanes)
+  - [x] `compute_all(criteria, origin, destination, departure_time, wind, boat, step_minutes) -> dict[str, Route]`
+  - [x] Constante `CRITERIA = ("fastest", "comfort", "shelter", "traffic")`
+  - [x] Constante `HARBOURS: dict[str, tuple[float, float]]` — copie des ports normands (voir ci-dessous)
 
-- [ ] Modifier `voyageur/output/formatter.py` — ajouter `format_multi_criteria()` (AC: 1)
-  - [ ] `format_multi_criteria(results: dict[str, Route], wind: WindCondition | None = None) -> str`
-  - [ ] Pour chaque label/route : `=== FASTEST ===\n{format_timeline(route, wind)}`
-  - [ ] Sections séparées par `\n\n`
+- [x] Modifier `voyageur/output/formatter.py` — ajouter `format_multi_criteria()` (AC: 1)
+  - [x] `format_multi_criteria(results: dict[str, Route], wind: WindCondition | None = None) -> str`
+  - [x] Pour chaque label/route : `=== FASTEST ===\n{format_timeline(route, wind)}`
+  - [x] Sections séparées par `\n\n`
 
-- [ ] Modifier `voyageur/cli/main.py` — ajouter `--criteria` (AC: 1, 5, 6)
-  - [ ] `criteria: str | None = typer.Option(None, "--criteria", help="Route criteria: fastest,comfort,shelter,traffic or all")`
-  - [ ] Parser : `"all"` → `list(CRITERIA)` ; sinon `[c.strip() for c in criteria.split(",")]`
-  - [ ] Valider chaque criterion contre `CRITERIA` tuple, erreur si invalide
-  - [ ] Si criteria None → comportement inchangé (`IsochroneRoutePlanner`, `format_timeline`)
-  - [ ] Si criteria défini → `MultiCriteriaRoutePlanner`, `format_multi_criteria`
-  - [ ] Si `"traffic"` dans criteria → `typer.echo("⚠ traffic: no shipping lane data — falls back to fastest", err=True)`
-  - [ ] Import lazy de `MultiCriteriaRoutePlanner` dans `plan()` (même pattern que les autres imports lazy)
+- [x] Modifier `voyageur/cli/main.py` — ajouter `--criteria` (AC: 1, 5, 6)
+  - [x] `criteria: str | None = typer.Option(None, "--criteria", help="Route criteria: fastest,comfort,shelter,traffic or all")`
+  - [x] Parser : `"all"` → `list(CRITERIA)` ; sinon `[c.strip() for c in criteria.split(",")]`
+  - [x] Valider chaque criterion contre `CRITERIA` tuple, erreur si invalide
+  - [x] Si criteria None → comportement inchangé (`IsochroneRoutePlanner`, `format_timeline`)
+  - [x] Si criteria défini → `MultiCriteriaRoutePlanner`, `format_multi_criteria`
+  - [x] Si `"traffic"` dans criteria → `typer.echo("⚠ traffic: no shipping lane data — falls back to fastest", err=True)`
+  - [x] Import lazy de `MultiCriteriaRoutePlanner` dans `plan()` (même pattern que les autres imports lazy)
 
-- [ ] Modifier `tests/test_routing.py` — nouveaux tests multi-critères (AC: 7)
-  - [ ] `test_multi_criteria_fastest_and_comfort_are_distinct` : `compute_all(["fastest", "comfort"])`, vérifier que `fastest.waypoints[0].heading != comfort.waypoints[0].heading`
-  - [ ] `test_multi_criteria_all_returns_four_routes` : `compute_all(list(CRITERIA))`, vérifier que `len(results) == 4` et chaque valeur est une `Route`
+- [x] Modifier `tests/test_routing.py` — nouveaux tests multi-critères (AC: 7)
+  - [x] `test_multi_criteria_fastest_and_comfort_are_distinct` : `compute_all(["fastest", "comfort"])`, vérifier que `fastest.waypoints[0].heading != comfort.waypoints[0].heading`
+  - [x] `test_multi_criteria_all_returns_four_routes` : `compute_all(list(CRITERIA))`, vérifier que `len(results) == 4` et chaque valeur est une `Route`
 
-- [ ] Valider (AC: 7)
-  - [ ] `poetry run ruff check voyageur/ tests/`
-  - [ ] `poetry run pytest tests/ -v`
+- [x] Valider (AC: 7)
+  - [x] `poetry run ruff check voyageur/ tests/`
+  - [x] `poetry run pytest tests/ -v`
 
 ## Dev Notes
 
@@ -469,4 +469,14 @@ claude-sonnet-4-6
 
 ### Completion Notes List
 
+- Tous les ACs satisfaits. 54 tests passent (+2 nouveaux story 4.2), ruff 0 violations.
+- `MultiCriteriaRoutePlanner` dans `multi.py` : même boucle que `IsochroneRoutePlanner` mais collecte tous les headings viables avant de scorer. Critères fastest/traffic = déviation minimale du bearing direct ; comfort = TWA le plus proche de 90° ; shelter = position suivante la plus proche d'un port normand.
+- `format_multi_criteria()` ajoutée dans `formatter.py` : sections `=== CRITERION ===` séparées par `\n\n`.
+- CLI : `--criteria fastest,comfort,shelter,traffic|all` ; comportement single-route inchangé si absent ; warning stderr pour traffic (pas de données lanes).
+
 ### File List
+
+- `voyageur/routing/multi.py` (créé)
+- `voyageur/output/formatter.py` (modifié — `format_multi_criteria()`)
+- `voyageur/cli/main.py` (modifié — `--criteria` option)
+- `tests/test_routing.py` (modifié — 2 nouveaux tests multi-critères)

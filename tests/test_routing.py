@@ -1,4 +1,4 @@
-"""Tests for RoutePlanner — Story 2.2, IsochroneRoutePlanner — Story 4.1."""
+"""Tests for RoutePlanner (2.2), IsochroneRoutePlanner (4.1), MultiCriteria (4.2)."""
 import datetime
 import time
 
@@ -6,6 +6,7 @@ import pytest
 
 from voyageur.models import BoatProfile, Route, SafetyThresholds, WindCondition
 from voyageur.routing.isochrone import IsochroneRoutePlanner
+from voyageur.routing.multi import CRITERIA, MultiCriteriaRoutePlanner
 from voyageur.routing.planner import MAX_STEPS, RoutePlanner
 from voyageur.routing.safety import evaluate_route
 
@@ -427,6 +428,61 @@ def test_isochrone_avoids_obstacle(mock_tidal, boat, now):
     # heading[0] doit être dévié de +15° du bearing direct (premier offset libre)
     # bearing Cherbourg→Granville ≈ 178° → heading dévié ≈ 193°
     assert abs(route.waypoints[0].heading - 178.0) > 5.0
+
+
+# ---------------------------------------------------------------------------
+# MultiCriteriaRoutePlanner — Story 4.2
+# ---------------------------------------------------------------------------
+
+
+def test_multi_criteria_fastest_and_comfort_are_distinct(
+    mock_tidal, mock_cartography, boat, now
+):
+    """Fastest et comfort doivent sélectionner des headings différents."""
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    planner = MultiCriteriaRoutePlanner(
+        tidal=mock_tidal, cartography=mock_cartography
+    )
+    results = planner.compute_all(
+        origin=CHERBOURG,
+        destination=GRANVILLE,
+        departure_time=now,
+        wind=wind,
+        boat=boat,
+        step_minutes=15,
+        criteria=["fastest", "comfort"],
+    )
+    assert "fastest" in results
+    assert "comfort" in results
+    fastest = results["fastest"]
+    comfort = results["comfort"]
+    assert isinstance(fastest, Route)
+    assert isinstance(comfort, Route)
+    # Bearing Cherbourg→Granville ≈ 178°, vent 240° → TWA direct ≈ 62°
+    # fastest : heading ≈ 178° ; comfort : heading ≈ 150° (TWA ≈ 90°)
+    assert fastest.waypoints[0].heading != comfort.waypoints[0].heading
+
+
+def test_multi_criteria_all_returns_four_routes(
+    mock_tidal, mock_cartography, boat, now
+):
+    """compute_all avec tous les critères retourne 4 routes valides."""
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    planner = MultiCriteriaRoutePlanner(
+        tidal=mock_tidal, cartography=mock_cartography
+    )
+    results = planner.compute_all(
+        origin=CHERBOURG,
+        destination=GRANVILLE,
+        departure_time=now,
+        wind=wind,
+        boat=boat,
+        step_minutes=15,
+    )
+    assert len(results) == len(CRITERIA)
+    for label, route in results.items():
+        assert isinstance(route, Route), f"{label}: expected Route"
+        assert len(route.waypoints) >= 1, f"{label}: no waypoints"
 
 
 def test_safety_no_thresholds_no_flags(mock_tidal, mock_cartography, boat, now):
