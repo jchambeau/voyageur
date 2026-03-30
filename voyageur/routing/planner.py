@@ -147,6 +147,9 @@ class RoutePlanner:
                 current_lon, current_lat, destination[1], destination[0]
             )
             if remaining_m <= ARRIVAL_TOLERANCE_M:
+                arrival_tidal = self._tidal.get_current(
+                    current_lat, current_lon, current_time
+                )
                 route.waypoints.append(
                     Waypoint(
                         lat=current_lat,
@@ -154,8 +157,8 @@ class RoutePlanner:
                         timestamp=current_time,
                         heading=heading,
                         speed_over_ground=sog,
-                        tidal_current_speed=tidal_state.current_speed,
-                        tidal_current_direction=tidal_state.current_direction,
+                        tidal_current_speed=arrival_tidal.current_speed,
+                        tidal_current_direction=arrival_tidal.current_direction,
                     )
                 )
                 break

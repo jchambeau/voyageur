@@ -69,3 +69,13 @@
 - Faux positif shapely `intersects` au contact de frontière [impl.py:35] — `intersects` retourne True si la ligne touche seulement la frontière (sans la traverser) ; `crosses` éviterait ça mais exclurait les cas légitimes de contact ; limitation inhérente au prédicat, acceptable pour MVP
 - Faux négatif si waypoint entièrement à l'intérieur d'un polygone [impl.py:32] — si deux waypoints consécutifs sont tous les deux dans un polygone sans que le segment en croise la frontière, pas de détection ; correction = ajouter `polygon.contains(Point(lon, lat))` par waypoint ; hors scope MVP
 - Pas de polygones de hauts-fonds distincts dans normandy.geojson — spec dev notes reconnaît que les données sont simplifiées pour MVP (deux polygones côtiers approximatifs) ; données OSM précises avec hauts-fonds prévues en Story 4+
+
+## Deferred from: code review of 3-2-safety-threshold-evaluation (2026-03-30)
+
+- Vent global non par-waypoint [routing/planner.py] — design MVP documenté dans docstring planner ("constant wind conditions for the passage (MVP)") et dans les tasks de la story ; correction = ajouter wind_speed par waypoint, scope Story 4+
+- `max_dist_shelter` absent du fallback boat.yaml [cli/main.py] — shelter non implémenté MVP ; à implémenter avec les données abri dans Story 4+
+- `max_dist_shelter` non transmis à `SafetyThresholds` [cli/main.py] — même raison ; le champ existe dans le dataclass mais `evaluate_route` ne le vérifie pas
+- 80 colonnes dépassées par marqueur ⚠ [output/formatter.py] — esthétique ; le row atteint ~60 chars (simple-width) ou ~62 (double-width terminal) ; contrainte fonctionnelle non impactée
+- Pas d'alerte stderr pour flags partiels [cli/main.py] — UX : si N < total waypoints sont flagués, aucun message explicite n'est émis au-delà du ⚠ inline et du footer "Flags: N" ; amélioration UX hors scope
+- Mutation `evaluate_route` sans option immutable [routing/safety.py] — documenté dans docstring ; unique appelant en CLI ; mode copy-on-eval = amélioration future si evaluate_route est réutilisé en dehors du CLI
+- Route origin=dest flaguée → Exit(1) quand 1 waypoint + threshold dépassé — correct per AC4 ; comportement surprenant mais spec-correct

@@ -1,6 +1,6 @@
 # Story 3.2: Safety Threshold Evaluation
 
-Status: review
+Status: done
 
 ## Story
 
@@ -416,6 +416,22 @@ Aucune nouvelle dépendance — uniquement des modules stdlib + existants.
 - Story 3.1 : `_bmad-output/implementation-artifacts/3-1-coastal-obstacle-detection.md`
 - conftest : `tests/conftest.py` — fixtures mock_tidal, mock_cartography
 - test_output.py : vérifier assertions TIDE avant de modifier le formatter
+
+### Review Findings
+
+- [x] [Review][Decision] Sémantique `>` vs `>=` : `max_wind=15.0` avec `wind=15.0` ne flag PAS (inégalité stricte non documentée) — voyageur/routing/safety.py — résolu: `>=` (option B)
+- [x] [Review][Patch] `_load_boat` ne capture pas `ImportError` — crash si PyYAML absent au lieu de fallback [cli/main.py]
+- [x] [Review][Patch] Seuils négatifs non validés : `--max-wind=-5` flag tout silencieusement sans message d'erreur [cli/main.py]
+- [x] [Review][Patch] `test_safety_flags_exceed_current` manque `assert all(wp.flagged ...)` [tests/test_routing.py]
+- [x] [Review][Patch] AC6 : manque test "un seul segment flagué" (courant partiel, pas wind) [tests/test_routing.py]
+- [x] [Review][Patch] Waypoint d'arrivée utilise `tidal_state` du step précédent (données marée périmées) [routing/planner.py:150]
+- [x] [Review][Defer] Vent global non par-waypoint [routing/planner.py] — deferred, pre-existing (design MVP documenté dans docstring planner)
+- [x] [Review][Defer] `max_dist_shelter` absent du fallback boat.yaml [cli/main.py] — deferred, pre-existing (shelter non implémenté MVP)
+- [x] [Review][Defer] `max_dist_shelter` non transmis à `SafetyThresholds` [cli/main.py] — deferred, pre-existing (shelter non implémenté MVP)
+- [x] [Review][Defer] 80 colonnes dépassées par marqueur ⚠ [output/formatter.py] — deferred, pre-existing (esthétique, non fonctionnel)
+- [x] [Review][Defer] Pas d'alerte stderr pour flags partiels [cli/main.py] — deferred, pre-existing (amélioration UX hors périmètre)
+- [x] [Review][Defer] Mutation `evaluate_route` sans option immutable [routing/safety.py] — deferred, pre-existing (documenté, unique appelant CLI)
+- [x] [Review][Defer] Route origin=dest flaguée → Exit(1) — deferred, pre-existing (correct per AC4 : ALL waypoints flagged inclut 1/1)
 
 ## Dev Agent Record
 

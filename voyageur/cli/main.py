@@ -99,7 +99,7 @@ def _load_boat() -> tuple[BoatProfile, bool, dict[str, float]]:
             True,
             thresholds,
         )
-    except (KeyError, TypeError, ValueError, OSError, _yaml.YAMLError):
+    except (KeyError, TypeError, ValueError, OSError, ImportError, _yaml.YAMLError):
         return _DEFAULT_BOAT, False, {}
 
 
@@ -110,9 +110,9 @@ def plan(
     depart: str = typer.Option(..., "--depart", help="Departure time (ISO 8601)"),
     wind: str = typer.Option(..., "--wind", help="Wind direction/speed (e.g. 240/15)"),
     step: int = typer.Option(15, "--step", help="Time step in minutes (1,5,15,30,60)"),
-    max_wind: float | None = typer.Option(None, "--max-wind", help="Max wind speed (kn)"),
+    max_wind: float | None = typer.Option(None, "--max-wind", help="Max wind speed (kn)", min=0.0),
     max_current: float | None = typer.Option(
-        None, "--max-current", help="Max tidal current speed (kn)"
+        None, "--max-current", help="Max tidal current speed (kn)", min=0.0
     ),
     max_dist_shelter: float | None = typer.Option(
         None, "--max-dist-shelter", help="Max distance from shelter (NM)"

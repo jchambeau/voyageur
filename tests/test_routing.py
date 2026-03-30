@@ -310,6 +310,44 @@ def test_safety_flags_exceed_current(mock_cartography, boat, now):
     thresholds = SafetyThresholds(max_current_kn=2.0)
     count = evaluate_route(route, wind, thresholds)
     assert count == len(route.waypoints)
+    assert all(wp.flagged for wp in route.waypoints)
+
+
+def test_safety_partial_current_flags(mock_cartography, boat, now):
+    """Courant élevé sur 1er waypoint seulement → flag partiel (AC6)."""
+    from voyageur.models import TidalState
+
+    call_count = 0
+
+    class _FirstStepHighCurrentTidal:
+        def get_current(
+            self, lat: float, lon: float, at: datetime.datetime
+        ) -> TidalState:
+            nonlocal call_count
+            call_count += 1
+            speed = 3.0 if call_count == 1 else 0.5
+            return TidalState(
+                timestamp=at,
+                current_direction=90.0,
+                current_speed=speed,
+                water_height=0.0,
+            )
+
+    planner = RoutePlanner(
+        tidal=_FirstStepHighCurrentTidal(), cartography=mock_cartography
+    )
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    route = planner.compute(
+        origin=CHERBOURG, destination=GRANVILLE,
+        departure_time=now, wind=wind, boat=boat,
+    )
+    thresholds = SafetyThresholds(max_current_kn=2.0)
+    count = evaluate_route(route, wind, thresholds)
+    assert 0 < count < len(route.waypoints), (
+        f"Expected partial flags, got {count}/{len(route.waypoints)}"
+    )
+    assert route.waypoints[0].flagged
+    assert not route.waypoints[-1].flagged
 
 
 def test_safety_no_thresholds_no_flags(mock_tidal, mock_cartography, boat, now):

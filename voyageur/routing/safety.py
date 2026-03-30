@@ -15,12 +15,12 @@ def evaluate_route(
         flagged = False
         if (
             thresholds.max_wind_kn is not None
-            and wind.speed > thresholds.max_wind_kn
+            and wind.speed >= thresholds.max_wind_kn
         ):
             flagged = True
         if (
             thresholds.max_current_kn is not None
-            and wp.tidal_current_speed > thresholds.max_current_kn
+            and wp.tidal_current_speed >= thresholds.max_current_kn
         ):
             flagged = True
         wp.flagged = flagged
