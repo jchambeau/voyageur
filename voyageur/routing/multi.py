@@ -135,7 +135,7 @@ class MultiCriteriaRoutePlanner:
         distance_m: float,
     ) -> float:
         """Distance (m) to nearest harbour after advancing along candidate."""
-        if distance_m <= 0.0:
+        if distance_m <= 0.0 or not self._harbours:
             return float("inf")
         cand_lon, cand_lat, _ = _GEOD.fwd(
             current_lon, current_lat, candidate, distance_m

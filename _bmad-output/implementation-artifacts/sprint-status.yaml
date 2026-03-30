@@ -67,7 +67,7 @@ development_status:
   # Epic 4: [Growth] Intelligent Multi-Criteria Routing
   epic-4: in-progress
   4-1-isochrone-grid-with-obstacle-avoidance: done
-  4-2-multi-criteria-route-computation: review
+  4-2-multi-criteria-route-computation: done
   4-3-optimal-departure-time-suggestion: backlog
   4-4-route-re-planning-from-current-position: backlog
   epic-4-retrospective: optional

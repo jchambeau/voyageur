@@ -236,9 +236,12 @@ def plan(
             step_minutes=step,
             criteria=criteria_list,
         )
+        for route in results.values():
+            evaluate_route(route, wind_condition, thresholds)
         first_route = next(iter(results.values()))
-        flag_count = evaluate_route(first_route, wind_condition, thresholds)
-        if flag_count > 0 and flag_count == len(first_route.waypoints):
+        if len(first_route.waypoints) > 0 and all(
+            wp.flagged for wp in first_route.waypoints
+        ):
             typer.echo(
                 "✗ No viable conditions — all segments exceed safety thresholds.",
                 err=True,
