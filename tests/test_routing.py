@@ -209,6 +209,24 @@ def test_performance_nfr1_15min_step(mock_tidal, mock_cartography, boat, now):
     assert len(route.waypoints) > 0
 
 
+def test_isochrone_performance_nfr2_1min_step(mock_tidal, mock_cartography, boat, now):
+    """Cherbourg→Granville at 1-min step must complete in under 30 s (NFR2)."""
+    planner = IsochroneRoutePlanner(tidal=mock_tidal, cartography=mock_cartography)
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    t0 = time.perf_counter()
+    route = planner.compute(
+        origin=CHERBOURG,
+        destination=GRANVILLE,
+        departure_time=now,
+        wind=wind,
+        boat=boat,
+        step_minutes=1,
+    )
+    elapsed = time.perf_counter() - t0
+    assert elapsed < 30.0, f"NFR2 violated: {elapsed:.3f}s (limit: 30s)"
+    assert len(route.waypoints) > 0
+
+
 # ---------------------------------------------------------------------------
 # Tidal current integration
 # ---------------------------------------------------------------------------
