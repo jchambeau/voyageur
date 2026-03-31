@@ -82,9 +82,9 @@
 
 ## Deferred from: code review of 4-3 + 4-4 (2026-03-31)
 
-- `DepartureResult.time_saved` peut être négatif si le baseline est meilleur que tout slot de la fenêtre — géré à l'affichage (`saved.total_seconds() > 0`) mais la valeur stockée est sémantiquement ambiguë ; normaliser à 0 si négatif, ou documenter l'invariant
+- ~~`DepartureResult.time_saved` peut être négatif~~ — **FIXED** (`max(..., timedelta(0))` dans `departure.py`)
 - `baseline_departure` non validée contre `window_start`/`window_end` dans `OptimalDeparturePlanner.scan` — hors spec MVP ; si baseline ∈ fenêtre, la comparaison est biaisée par la duplication du calcul ; à documenter ou valider en Story 5+
-- Fenêtre plus courte que `scan_interval_minutes` évalue silencieusement seulement `window_start` sans avertissement utilisateur — edge case hors spec ; ajouter un warning CLI si `window_end - window_start < timedelta(minutes=scan_interval_minutes)`
+- ~~Fenêtre plus courte que `scan_interval_minutes` sans avertissement~~ — **FIXED** (warning `⚠ --window shorter than 30-minute scan interval` dans `cli/main.py`)
 
 ## Deferred from: code review of 3-3-boat-profile-management (2026-03-30)
 

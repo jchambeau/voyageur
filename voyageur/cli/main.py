@@ -268,6 +268,12 @@ def plan(
         if window_range[1] <= window_range[0]:
             typer.echo("✗ --window end must be after start", err=True)
             raise typer.Exit(1)
+        if window_range[1] - window_range[0] < datetime.timedelta(minutes=30):
+            typer.echo(
+                "⚠ --window shorter than 30-minute scan interval"
+                " — only departure time will be evaluated.",
+                err=True,
+            )
 
     from voyageur.cartography.impl import GeoJsonCartography
     from voyageur.output.formatter import format_multi_criteria, format_timeline

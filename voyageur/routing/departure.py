@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import warnings
 
 from voyageur.cartography.protocol import CartographyProvider
 from voyageur.models import BoatProfile, Route, WindCondition
@@ -35,6 +36,13 @@ class OptimalDeparturePlanner:
         scan_interval_minutes: int = 30,
         step_minutes: int = 15,
     ) -> DepartureResult:
+        if window_start <= baseline_departure <= window_end:
+            warnings.warn(
+                "baseline_departure falls inside the scan window — "
+                "time_saved comparison may be biased.",
+                UserWarning,
+                stacklevel=2,
+            )
         planner = IsochroneRoutePlanner(self._tidal, self._cartography)
         step = datetime.timedelta(minutes=scan_interval_minutes)
 
@@ -71,7 +79,10 @@ class OptimalDeparturePlanner:
             boat=boat,
             step_minutes=step_minutes,
         )
-        time_saved = baseline_route.total_duration - best_route.total_duration
+        time_saved = max(
+            baseline_route.total_duration - best_route.total_duration,
+            datetime.timedelta(0),
+        )
 
         return DepartureResult(
             optimal_departure=best_t,

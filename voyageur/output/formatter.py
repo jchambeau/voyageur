@@ -18,7 +18,7 @@ def _elapsed(wp_timestamp: datetime.datetime, departure_time: datetime.datetime)
     total_sec = int((wp_timestamp - departure_time).total_seconds())
     h, rem = divmod(total_sec, 3600)
     m = rem // 60
-    return f"{h:02d}:{m:02d}"
+    return f"{h:02d}:{m:02d}" if h < 100 else f"{h}:{m:02d}"
 
 
 def _fmt_lat(lat: float) -> str:
@@ -44,8 +44,8 @@ def _fmt_sog(sog: float) -> str:
 
 
 def _fmt_dir_spd(direction: float, speed: float) -> str:
-    """Format direction/speed as NNN/NN.N (up to 8 chars)."""
-    return f"{direction:3.0f}/{speed:.1f}"
+    """Format direction/speed as NNN/NN.N (8 chars)."""
+    return f"{direction:3.0f}/{speed:4.1f}"
 
 
 def _total_distance_nm(waypoints: list[Waypoint]) -> float:
