@@ -1,6 +1,6 @@
 # Story 4.3: Optimal Departure Time Suggestion
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -21,33 +21,41 @@ so that tidal currents work in my favour and I can save significant time without
 
 ## Tasks / Subtasks
 
-- [ ] Créer `voyageur/routing/departure.py` — `DepartureResult` + `OptimalDeparturePlanner` (AC: 1, 2)
-  - [ ] Dataclass `DepartureResult(optimal_departure, optimal_route, baseline_departure, baseline_route, time_saved)`
-  - [ ] Classe `OptimalDeparturePlanner(tidal: TidalProvider, cartography: CartographyProvider)`
-  - [ ] Méthode `scan(origin, destination, window_start, window_end, wind, boat, scan_interval_minutes=30, step_minutes=15) -> DepartureResult`
-  - [ ] Boucle : `t = window_start`; incrémenter par `scan_interval_minutes` jusqu'à `t <= window_end` ; au moins une évaluation (window_start) même si fenêtre = 0
-  - [ ] Utiliser `IsochroneRoutePlanner` pour chaque `t`
-  - [ ] Sélectionner `t` minimisant `route.total_duration`
-  - [ ] `baseline_departure` = `departure_time` fourni par le caller (--depart) ; `baseline_route` = route pour ce temps
-  - [ ] `time_saved` = `baseline_route.total_duration - optimal_route.total_duration` (peut être négative/zéro)
+- [x] Créer `voyageur/routing/departure.py` — `DepartureResult` + `OptimalDeparturePlanner` (AC: 1, 2)
+  - [x] Dataclass `DepartureResult(optimal_departure, optimal_route, baseline_departure, baseline_route, time_saved)`
+  - [x] Classe `OptimalDeparturePlanner(tidal: TidalProvider, cartography: CartographyProvider)`
+  - [x] Méthode `scan(origin, destination, window_start, window_end, wind, boat, scan_interval_minutes=30, step_minutes=15) -> DepartureResult`
+  - [x] Boucle : `t = window_start`; incrémenter par `scan_interval_minutes` jusqu'à `t <= window_end` ; au moins une évaluation (window_start) même si fenêtre = 0
+  - [x] Utiliser `IsochroneRoutePlanner` pour chaque `t`
+  - [x] Sélectionner `t` minimisant `route.total_duration`
+  - [x] `baseline_departure` = `departure_time` fourni par le caller (--depart) ; `baseline_route` = route pour ce temps
+  - [x] `time_saved` = `baseline_route.total_duration - optimal_route.total_duration` (peut être négative/zéro)
 
-- [ ] Modifier `voyageur/cli/main.py` — ajouter `--optimize-departure` + `--window` (AC: 3, 4, 5, 6, 7)
-  - [ ] Ajouter `optimize_departure: bool = typer.Option(False, "--optimize-departure", is_flag=True, help="Find optimal departure in window")`
-  - [ ] Ajouter `window: str | None = typer.Option(None, "--window", help="Search window ISO/ISO (e.g. 2026-03-29T06:00/2026-03-29T12:00)")`
-  - [ ] Après validation existante : si `optimize_departure` et `window is None` → erreur stderr + Exit(1)
-  - [ ] Parser la fenêtre : splitter sur `/`, parser chaque partie avec `_parse_depart()`, valider `window_end > window_start`
-  - [ ] Dans le bloc d'imports lazy : ajouter `from voyageur.routing.departure import OptimalDeparturePlanner`
-  - [ ] Branche `optimize_departure` : appeler `OptimalDeparturePlanner(tidal, cartography).scan(...)` avec `baseline_departure=departure_time`
-  - [ ] Formatter la ligne de recommandation + la timeline de la route optimale (via `format_timeline`)
+- [x] Modifier `voyageur/cli/main.py` — ajouter `--optimize-departure` + `--window` (AC: 3, 4, 5, 6, 7)
+  - [x] Ajouter `optimize_departure: bool = typer.Option(False, "--optimize-departure", is_flag=True, help="Find optimal departure in window")`
+  - [x] Ajouter `window: str | None = typer.Option(None, "--window", help="Search window ISO/ISO (e.g. 2026-03-29T06:00/2026-03-29T12:00)")`
+  - [x] Après validation existante : si `optimize_departure` et `window is None` → erreur stderr + Exit(1)
+  - [x] Parser la fenêtre : splitter sur `/`, parser chaque partie avec `_parse_depart()`, valider `window_end > window_start`
+  - [x] Dans le bloc d'imports lazy : ajouter `from voyageur.routing.departure import OptimalDeparturePlanner`
+  - [x] Branche `optimize_departure` : appeler `OptimalDeparturePlanner(tidal, cartography).scan(...)` avec `baseline_departure=departure_time`
+  - [x] Formatter la ligne de recommandation + la timeline de la route optimale (via `format_timeline`)
 
-- [ ] Modifier `tests/test_routing.py` — nouveaux tests (AC: 8)
-  - [ ] Définir `_EarlyFavorableTidalProvider` localement (retourne `TidalState(current_direction=180.0, current_speed=2.0, ...)` si `at.hour < 7`, sinon zéro)
-  - [ ] `test_optimal_departure_6h_window_returns_earlier_departure` : fenêtre 06:00–12:00, baseline=08:00 → vérifier `result.optimal_departure.hour < 8`
-  - [ ] `test_optimal_departure_result_contains_route` : vérifier `isinstance(result.optimal_route, Route)` et `len(result.optimal_route.waypoints) >= 1`
+- [x] Modifier `tests/test_routing.py` — nouveaux tests (AC: 8)
+  - [x] Définir `_EarlyFavorableTidalProvider` localement (3kn sud avant 07:00, zéro sinon — current_speed=3.0 requis pour différence de durée visible avec le pas de 15min)
+  - [x] `test_optimal_departure_6h_window_returns_earlier_departure` : fenêtre 06:00–12:00, baseline=08:00 → vérifier `result.optimal_departure.hour < 8`
+  - [x] `test_optimal_departure_result_contains_route` : vérifier `isinstance(result.optimal_route, Route)` et `len(result.optimal_route.waypoints) >= 1`
 
-- [ ] Valider (AC: 8)
-  - [ ] `poetry run ruff check voyageur/ tests/`
-  - [ ] `poetry run pytest tests/ -v`
+- [x] Valider (AC: 8)
+  - [x] `poetry run ruff check voyageur/ tests/`
+  - [x] `poetry run pytest tests/ -v`
+
+### Review Findings
+
+- [x] [Review][Patch] `--optimize-departure` branch skips `evaluate_route` and land intersection check [voyageur/cli/main.py — optimize_departure branch in plan()] — **High** — la route optimale est affichée sans vérification des seuils de sécurité ni détection de terre ; `evaluate_route` + `cartography.intersects_land` doivent être appelés avant `format_timeline`
+- [x] [Review][Patch] Guard `window_range is not None` redondant dans `if optimize_departure and window_range is not None` [voyageur/cli/main.py ~302] — **Low** — la validation précédente garantit que `window_range` n'est jamais `None` ici ; simplifier en `if optimize_departure:`
+- [x] [Review][Defer] `time_saved` peut être négatif dans `DepartureResult` [departure.py:74] — deferred, pre-existing design decision — handled at display level with `saved.total_seconds() > 0`
+- [x] [Review][Defer] `baseline_departure` non validée contre la fenêtre [departure.py] — deferred, design choice — hors spec, comportement intentionnel
+- [x] [Review][Defer] Fenêtre < `scan_interval_minutes` évalue seulement `window_start` sans avertissement [departure.py] — deferred, edge case out of spec
 
 ## Dev Notes
 
@@ -343,6 +351,21 @@ claude-sonnet-4-6
 
 ### Debug Log References
 
+- `_EarlyFavorableTidalProvider` doit utiliser `current_speed=3.0` (pas 2.0) : avec 2kn, l'overshoot du pas de 15min annule le gain sur Cherbourg→Granville. 3kn produit une différence de durée nette de 30 minutes.
+
 ### Completion Notes List
 
+- Créé `voyageur/routing/departure.py` : `DepartureResult` (dataclass) + `OptimalDeparturePlanner.scan()` qui évalue la fenêtre par intervalles de 30min via `IsochroneRoutePlanner`.
+- Modifié `voyageur/cli/main.py` : options `--optimize-departure` + `--window`, fonction `_parse_window()`, validation, branche exclusive `if optimize_departure` (priorité sur `criteria_list`).
+- Modifié `tests/test_routing.py` : 2 nouveaux tests + `_EarlyFavorableTidalProvider` local.
+- 56/56 tests passent, 0 violation ruff.
+
 ### File List
+
+- `voyageur/routing/departure.py` (créé)
+- `voyageur/cli/main.py` (modifié)
+- `tests/test_routing.py` (modifié)
+
+## Change Log
+
+- 2026-03-31 : Story 4.3 implémentée — `OptimalDeparturePlanner`, `--optimize-departure`, `--window`

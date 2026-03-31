@@ -28,7 +28,7 @@ poetry install
 ### Plan a passage
 
 ```bash
-voyageur plan --from Cherbourg --to Granville --depart 2026-03-29T08:00 --wind 240/15
+poetry run voyageur plan --from Cherbourg --to Granville --depart 2026-03-29T08:00 --wind 240/15
 ```
 
 Options:

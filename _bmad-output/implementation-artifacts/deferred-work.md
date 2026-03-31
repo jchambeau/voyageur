@@ -80,6 +80,12 @@
 - Mutation `evaluate_route` sans option immutable [routing/safety.py] — documenté dans docstring ; unique appelant en CLI ; mode copy-on-eval = amélioration future si evaluate_route est réutilisé en dehors du CLI
 - Route origin=dest flaguée → Exit(1) quand 1 waypoint + threshold dépassé — correct per AC4 ; comportement surprenant mais spec-correct
 
+## Deferred from: code review of 4-3 + 4-4 (2026-03-31)
+
+- `DepartureResult.time_saved` peut être négatif si le baseline est meilleur que tout slot de la fenêtre — géré à l'affichage (`saved.total_seconds() > 0`) mais la valeur stockée est sémantiquement ambiguë ; normaliser à 0 si négatif, ou documenter l'invariant
+- `baseline_departure` non validée contre `window_start`/`window_end` dans `OptimalDeparturePlanner.scan` — hors spec MVP ; si baseline ∈ fenêtre, la comparaison est biaisée par la duplication du calcul ; à documenter ou valider en Story 5+
+- Fenêtre plus courte que `scan_interval_minutes` évalue silencieusement seulement `window_start` sans avertissement utilisateur — edge case hors spec ; ajouter un warning CLI si `window_end - window_start < timedelta(minutes=scan_interval_minutes)`
+
 ## Deferred from: code review of 3-3-boat-profile-management (2026-03-30)
 
 - `min=0.0` accepte loa/draft/sail_area=0 [cli/config.py] — pre-existing : _load_boat accepte aussi ces valeurs depuis YAML ; validation métier (loa > 0) hors scope MVP

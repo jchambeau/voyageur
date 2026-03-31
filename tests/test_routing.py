@@ -1,10 +1,18 @@
-"""Tests for RoutePlanner (2.2), IsochroneRoutePlanner (4.1), MultiCriteria (4.2)."""
+"""Tests for RoutePlanner (2.2), IsochroneRoutePlanner (4.1), MultiCriteria (4.2),
+OptimalDeparturePlanner (4.3)."""
 import datetime
 import time
 
 import pytest
 
-from voyageur.models import BoatProfile, Route, SafetyThresholds, WindCondition
+from voyageur.models import (
+    BoatProfile,
+    Route,
+    SafetyThresholds,
+    TidalState,
+    WindCondition,
+)
+from voyageur.routing.departure import DepartureResult, OptimalDeparturePlanner
 from voyageur.routing.isochrone import IsochroneRoutePlanner
 from voyageur.routing.multi import CRITERIA, MultiCriteriaRoutePlanner
 from voyageur.routing.planner import MAX_STEPS, RoutePlanner
@@ -496,3 +504,76 @@ def test_safety_no_thresholds_no_flags(mock_tidal, mock_cartography, boat, now):
     thresholds = SafetyThresholds()
     count = evaluate_route(route, wind, thresholds)
     assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# OptimalDeparturePlanner — Story 4.3
+# ---------------------------------------------------------------------------
+
+
+class _EarlyFavorableTidalProvider:
+    """Returns 3kn southbound current before 07:00 UTC, zero otherwise."""
+
+    def get_current(self, lat: float, lon: float, at: datetime.datetime) -> TidalState:
+        if at.hour < 7:
+            return TidalState(
+                timestamp=at,
+                current_direction=180.0,
+                current_speed=3.0,
+                water_height=0.0,
+            )
+        return TidalState(
+            timestamp=at,
+            current_direction=0.0,
+            current_speed=0.0,
+            water_height=0.0,
+        )
+
+
+def test_optimal_departure_6h_window_returns_earlier_departure(mock_cartography, boat):
+    """Optimal departure avec courant favorable avant 07:00 doit être avant 08:00."""
+    UTC = datetime.timezone.utc
+    window_start = datetime.datetime(2026, 3, 29, 6, 0, tzinfo=UTC)
+    window_end = datetime.datetime(2026, 3, 29, 12, 0, tzinfo=UTC)
+    baseline = datetime.datetime(2026, 3, 29, 8, 0, tzinfo=UTC)
+    wind = WindCondition(timestamp=window_start, direction=240.0, speed=15.0)
+    planner = OptimalDeparturePlanner(
+        tidal=_EarlyFavorableTidalProvider(), cartography=mock_cartography
+    )
+    result = planner.scan(
+        origin=CHERBOURG,
+        destination=GRANVILLE,
+        window_start=window_start,
+        window_end=window_end,
+        baseline_departure=baseline,
+        wind=wind,
+        boat=boat,
+        scan_interval_minutes=30,
+    )
+    assert result.optimal_departure.hour < 8
+    assert result.time_saved.total_seconds() > 0
+
+
+def test_optimal_departure_result_contains_route(mock_cartography, boat):
+    """DepartureResult contient une Route valide avec au moins 1 waypoint."""
+    UTC = datetime.timezone.utc
+    window_start = datetime.datetime(2026, 3, 29, 6, 0, tzinfo=UTC)
+    window_end = datetime.datetime(2026, 3, 29, 12, 0, tzinfo=UTC)
+    baseline = datetime.datetime(2026, 3, 29, 8, 0, tzinfo=UTC)
+    wind = WindCondition(timestamp=window_start, direction=240.0, speed=15.0)
+    planner = OptimalDeparturePlanner(
+        tidal=_EarlyFavorableTidalProvider(), cartography=mock_cartography
+    )
+    result = planner.scan(
+        origin=CHERBOURG,
+        destination=GRANVILLE,
+        window_start=window_start,
+        window_end=window_end,
+        baseline_departure=baseline,
+        wind=wind,
+        boat=boat,
+        scan_interval_minutes=30,
+    )
+    assert isinstance(result, DepartureResult)
+    assert isinstance(result.optimal_route, Route)
+    assert len(result.optimal_route.waypoints) >= 1

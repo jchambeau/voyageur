@@ -108,6 +108,60 @@ def test_config_show_missing_profile(
     assert result.exit_code == 1
 
 
+# ---------------------------------------------------------------------------
+# replan command — Story 4.4
+# ---------------------------------------------------------------------------
+
+
+def test_replan_happy_path(runner: CliRunner) -> None:
+    """Happy path: replan Cherbourg→Granville exits 0 avec timeline."""
+    result = runner.invoke(
+        app,
+        [
+            "replan",
+            "--from", "cherbourg",
+            "--to", "granville",
+            "--time", UTC_ISO,
+            "--wind", "240/15",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "NM" in result.output
+
+
+def test_replan_changed_wind_differs_from_original(runner: CliRunner) -> None:
+    """Deux replans avec vents différents produisent des outputs distincts."""
+    result1 = runner.invoke(
+        app,
+        ["replan", "--from", "cherbourg", "--to", "granville",
+         "--time", UTC_ISO, "--wind", "240/15"],
+    )
+    result2 = runner.invoke(
+        app,
+        ["replan", "--from", "cherbourg", "--to", "granville",
+         "--time", UTC_ISO, "--wind", "0/20"],
+    )
+    assert result1.exit_code == 0
+    assert result2.exit_code == 0
+    assert result1.output != result2.output
+
+
+def test_replan_invalid_port_exits_1(runner: CliRunner) -> None:
+    """Port inconnu → exit 1 avec ✗."""
+    result = runner.invoke(
+        app,
+        [
+            "replan",
+            "--from", "PortInconnu",
+            "--to", "granville",
+            "--time", UTC_ISO,
+            "--wind", "240/15",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "✗" in result.output
+
+
 def test_plan_draft_override(
     runner: CliRunner, tmp_path: pathlib.Path, monkeypatch
 ) -> None:
