@@ -170,7 +170,7 @@ class MultiCriteriaRoutePlanner:
                     h, current_lat, current_lon, distance_m
                 ),
             )
-        return viable[0]
+        raise ValueError(f"Unknown criterion: {criterion!r}")
 
     def _compute_one(
         self,

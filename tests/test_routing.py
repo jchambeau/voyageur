@@ -577,3 +577,38 @@ def test_optimal_departure_result_contains_route(mock_cartography, boat):
     assert isinstance(result, DepartureResult)
     assert isinstance(result.optimal_route, Route)
     assert len(result.optimal_route.waypoints) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Live-weather code path (Story 5.2) — WeatherProvider integration
+# ---------------------------------------------------------------------------
+
+
+def test_isochrone_with_weather_provider(mock_tidal, mock_cartography, boat, now):
+    """IsochroneRoutePlanner.compute() with weather= must call get_wind per step."""
+    call_count = 0
+
+    class _StepCountingWeather:
+        def get_wind(
+            self, lat: float, lon: float, at: datetime.datetime
+        ) -> WindCondition:
+            nonlocal call_count
+            call_count += 1
+            return WindCondition(timestamp=at, direction=240.0, speed=15.0)
+
+    weather = _StepCountingWeather()
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    planner = IsochroneRoutePlanner(tidal=mock_tidal, cartography=mock_cartography)
+    route = planner.compute(
+        origin=CHERBOURG,
+        destination=GRANVILLE,
+        departure_time=now,
+        wind=wind,
+        boat=boat,
+        step_minutes=15,
+        weather=weather,
+    )
+    assert isinstance(route, Route)
+    assert len(route.waypoints) >= 1
+    # get_wind must have been called once per routing step (minus arrival waypoint)
+    assert call_count == len(route.waypoints) - 1
