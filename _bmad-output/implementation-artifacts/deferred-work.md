@@ -80,6 +80,14 @@
 - Mutation `evaluate_route` sans option immutable [routing/safety.py] — documenté dans docstring ; unique appelant en CLI ; mode copy-on-eval = amélioration future si evaluate_route est réutilisé en dehors du CLI
 - Route origin=dest flaguée → Exit(1) quand 1 waypoint + threshold dépassé — correct per AC4 ; comportement surprenant mais spec-correct
 
+## Deferred from: code review of 5-1-shom-tidal-api-client (2026-03-31)
+
+- `httpx.Client` jamais fermé dans `ShomTidalClient.__init__` [shom_client.py:23] — CLI process court ; `ResourceWarning` théorique ; gestion explicite (.close() ou context manager) = Story 5.x
+- Datetime naïf passé à `at.isoformat()` sans timezone [shom_client.py:36] — pre-existing ; validation UTC = frontière CLI (Story 2.4, déjà déféré)
+- API key présente dans les params dict httpx — visible dans les tracebacks d'exception [shom_client.py:36] — risque sécurité faible, hors scope MVP ; httpx ne sérialise pas les params dans les exceptions par défaut
+- `capsys: object` type hint avec `# type: ignore[attr-defined]` [tests/test_tidal.py:129] — fonctionne correctement ; amélioration style = `pytest.CaptureFixture[str]` si mypy ajouté
+- `http_client: httpx.Client | None` annotation trop stricte pour l'injection de mocks [shom_client.py:20] — fonctionne à runtime (duck-typing) ; correction = Protocol ou `Any` si type-checking strict requis
+
 ## Deferred from: code review of 4-3 + 4-4 (2026-03-31)
 
 - ~~`DepartureResult.time_saved` peut être négatif~~ — **FIXED** (`max(..., timedelta(0))` dans `departure.py`)
