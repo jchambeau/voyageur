@@ -53,9 +53,9 @@
 ## Deferred from: code review of 2-3-ascii-80-column-output-formatter (2026-03-29)
 
 - ~~`_fmt_duration` utilise `int(td.total_seconds() / 60)`~~ — **FIXED** (`int(td.total_seconds()) // 60`)
-- `_fmt_dir_spd` produit 7 chars (au lieu de 8) pour speed < 10 kn : `f"{dir:3.0f}/{speed:.1f}"` → `" 90/5.0"` = 7 chars — désalignement cosmétique de la colonne WIND pour faibles vitesses ; contrainte 80 cols toujours respectée
+- ~~`_fmt_dir_spd` produit 7 chars (au lieu de 8) pour speed < 10 kn~~ — **FIXED** (`f"{speed:4.1f}"` → `" 90/ 5.0"` = 8 chars)
 - `_fmt_sog` overflow théorique pour SOG ≥ 100 kn : `f"{sog:4.1f}kn"` → `"100.0kn"` = 7 chars — impossible en voilier (SOG réaliste < 20 kn) ; à corriger si extension à des embarcations rapides
-- `_elapsed` colonne TIME déborde à 6 chars pour routes > 99h : `f"{h:02d}:{m:02d}"` → `"168:00"` — désalignement cosmétique du header, contrainte 80 cols toujours respectée (max row = 58 chars) ; sans impact pour les routes normandie (< 24h)
+- ~~`_elapsed` colonne TIME déborde à 6 chars pour routes > 99h~~ — **FIXED** (`h < 100` garde `{h:02d}`, sinon `{h}` sans padding)
 
 ## Deferred from: code review of 2-4-cli-route-planning-command (2026-03-29)
 
@@ -83,7 +83,7 @@
 ## Deferred from: code review of 4-3 + 4-4 (2026-03-31)
 
 - ~~`DepartureResult.time_saved` peut être négatif~~ — **FIXED** (`max(..., timedelta(0))` dans `departure.py`)
-- `baseline_departure` non validée contre `window_start`/`window_end` dans `OptimalDeparturePlanner.scan` — hors spec MVP ; si baseline ∈ fenêtre, la comparaison est biaisée par la duplication du calcul ; à documenter ou valider en Story 5+
+- ~~`baseline_departure` non validée contre `window_start`/`window_end` dans `OptimalDeparturePlanner.scan`~~ — **FIXED** (`warnings.warn(UserWarning)` si `baseline ∈ [window_start, window_end]`)
 - ~~Fenêtre plus courte que `scan_interval_minutes` sans avertissement~~ — **FIXED** (warning `⚠ --window shorter than 30-minute scan interval` dans `cli/main.py`)
 
 ## Deferred from: code review of 3-3-boat-profile-management (2026-03-30)

@@ -123,6 +123,32 @@ def _load_boat() -> tuple[BoatProfile, bool, dict[str, float]]:
         return _DEFAULT_BOAT, False, {}
 
 
+def _load_voyageur_config() -> dict:
+    """Load ~/.voyageur/config.yaml; return {} if absent or corrupt."""
+    import pathlib
+
+    import yaml as _yaml
+
+    path = pathlib.Path.home() / ".voyageur" / "config.yaml"
+    if not path.exists():
+        return {}
+    try:
+        return _yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, _yaml.YAMLError):
+        return {}
+
+
+def _build_tidal_provider() -> object:
+    """Return ShomTidalClient if shom_api_key configured, else HarmonicTidalModel."""
+    from voyageur.tidal.impl import HarmonicTidalModel
+    from voyageur.tidal.shom_client import ShomTidalClient
+
+    api_key = _load_voyageur_config().get("shom_api_key")
+    if api_key:
+        return ShomTidalClient(api_key=api_key)
+    return HarmonicTidalModel()
+
+
 def _handle_no_viable(
     origin: tuple[float, float],
     destination: tuple[float, float],
@@ -281,7 +307,6 @@ def plan(
     from voyageur.routing.multi import CRITERIA as _ALL_CRITERIA
     from voyageur.routing.multi import MultiCriteriaRoutePlanner
     from voyageur.routing.safety import evaluate_route
-    from voyageur.tidal.impl import HarmonicTidalModel
 
     # Parse --criteria option.
     criteria_list: list[str] | None = None
@@ -307,7 +332,7 @@ def plan(
         criteria_list = raw
 
     cartography = GeoJsonCartography()
-    tidal = HarmonicTidalModel()
+    tidal = _build_tidal_provider()
 
     if optimize_departure:
         from voyageur.routing.departure import OptimalDeparturePlanner
@@ -496,7 +521,6 @@ def replan(
     from voyageur.output.formatter import format_multi_criteria, format_timeline
     from voyageur.routing.isochrone import IsochroneRoutePlanner
     from voyageur.routing.safety import evaluate_route
-    from voyageur.tidal.impl import HarmonicTidalModel
 
     criteria_list: list[str] | None = None
     if criteria is not None:
@@ -523,7 +547,7 @@ def replan(
         criteria_list = raw
 
     cartography = GeoJsonCartography()
-    tidal = HarmonicTidalModel()
+    tidal = _build_tidal_provider()
 
     if criteria_list is not None:
         from voyageur.routing.multi import MultiCriteriaRoutePlanner

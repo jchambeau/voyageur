@@ -1,9 +1,36 @@
-"""Tests for HarmonicTidalModel."""
+"""Tests for HarmonicTidalModel and ShomTidalClient."""
 import datetime
 
 from voyageur.models import TidalState
 from voyageur.tidal.impl import HarmonicTidalModel
 from voyageur.tidal.protocol import TidalProvider
+from voyageur.tidal.shom_client import ShomTidalClient
+
+
+class _MockHttpResponse:
+    def __init__(self, data: dict) -> None:
+        self._data = data
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self) -> dict:
+        return self._data
+
+
+class _MockHttpClient:
+    def __init__(
+        self,
+        response_data: dict | None = None,
+        raise_error: Exception | None = None,
+    ) -> None:
+        self._data = response_data
+        self._raise = raise_error
+
+    def get(self, url: str, **kwargs) -> _MockHttpResponse:
+        if self._raise is not None:
+            raise self._raise
+        return _MockHttpResponse(self._data or {})
 
 # Reference port coordinates
 CHERBOURG = (49.6453, -1.6222)
@@ -74,3 +101,39 @@ def test_interpolation_midpoint(now: datetime.datetime) -> None:
     assert isinstance(result, TidalState)
     assert result.current_speed >= 0.0
     assert 0.0 <= result.current_direction < 360.0
+
+
+# --- ShomTidalClient tests ---
+
+
+def test_shom_client_satisfies_protocol() -> None:
+    assert isinstance(ShomTidalClient("key"), TidalProvider)
+
+
+def test_shom_client_happy_path(now: datetime.datetime) -> None:
+    client = ShomTidalClient(
+        api_key="test-key",
+        http_client=_MockHttpClient(
+            response_data={"direction": 180.0, "speed": 2.3, "height": 3.5}
+        ),
+    )
+    result = client.get_current(lat=CHERBOURG[0], lon=CHERBOURG[1], at=now)
+    assert isinstance(result, TidalState)
+    assert result.current_direction == 180.0
+    assert result.current_speed == 2.3
+    assert result.water_height == 3.5
+    assert result.timestamp == now
+
+
+def test_shom_client_fallback_on_error(
+    now: datetime.datetime, capsys: object
+) -> None:
+    client = ShomTidalClient(
+        api_key="test-key",
+        http_client=_MockHttpClient(raise_error=Exception("timeout")),
+    )
+    result = client.get_current(lat=CHERBOURG[0], lon=CHERBOURG[1], at=now)
+    assert isinstance(result, TidalState)
+    assert result.current_speed >= 0.0
+    captured = capsys.readouterr()  # type: ignore[attr-defined]
+    assert "⚠ SHOM API unavailable" in captured.err
