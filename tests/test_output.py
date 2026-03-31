@@ -1,10 +1,10 @@
-"""Tests for format_timeline — Story 2.3."""
+"""Tests for format_timeline and format_multi_criteria — Story 2.3."""
 import datetime
 
 import pytest
 
 from voyageur.models import Route, WindCondition
-from voyageur.output.formatter import format_timeline
+from voyageur.output.formatter import format_multi_criteria, format_timeline
 
 UTC = datetime.timezone.utc
 
@@ -94,6 +94,36 @@ def test_empty_route_does_not_raise(now):
 
 
 def test_wind_none_placeholder(sample_route):
-    """When wind=None, wind column must show placeholder '---/---'."""
+    """When wind=None, wind column must show 8-char placeholder '---/----'."""
     output = format_timeline(sample_route, wind=None)
-    assert "---/---" in output
+    assert "---/----" in output
+
+
+# ---------------------------------------------------------------------------
+# format_multi_criteria
+# ---------------------------------------------------------------------------
+
+
+def test_format_multi_criteria_sections(sample_route, now):
+    """format_multi_criteria must produce one labelled section per criterion."""
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    results = {"fastest": sample_route, "comfort": sample_route}
+    output = format_multi_criteria(results, wind=wind)
+    assert "=== FASTEST ===" in output
+    assert "=== COMFORT ===" in output
+    assert output.count("Total:") == 2
+
+
+def test_format_multi_criteria_wind_source(sample_route, now):
+    """format_multi_criteria must forward wind_source to each section footer."""
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    results = {"fastest": sample_route}
+    output = format_multi_criteria(results, wind=wind, wind_source="OpenMeteo")
+    assert "forecast (OpenMeteo)" in output
+
+
+def test_format_timeline_wind_source(sample_route, now):
+    """format_timeline must append wind_source to summary when provided."""
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    output = format_timeline(sample_route, wind=wind, wind_source="OpenMeteo")
+    assert "forecast (OpenMeteo)" in output

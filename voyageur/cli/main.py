@@ -6,6 +6,7 @@ import typer
 
 from voyageur.cli.config import config_app
 from voyageur.models import BoatProfile, SafetyThresholds, WindCondition
+from voyageur.tidal.protocol import TidalProvider
 
 app = typer.Typer(
     name="voyageur",
@@ -134,17 +135,20 @@ def _load_voyageur_config() -> dict:
         return {}
     try:
         return _yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, _yaml.YAMLError):
+    except OSError:
+        typer.echo("⚠ Cannot read ~/.voyageur/config.yaml — using defaults", err=True)
+        return {}
+    except _yaml.YAMLError:
         return {}
 
 
-def _build_tidal_provider() -> object:
+def _build_tidal_provider() -> TidalProvider:
     """Return ShomTidalClient if shom_api_key configured, else HarmonicTidalModel."""
     from voyageur.tidal.impl import HarmonicTidalModel
     from voyageur.tidal.shom_client import ShomTidalClient
 
     api_key = _load_voyageur_config().get("shom_api_key")
-    if api_key:
+    if isinstance(api_key, str) and api_key:
         return ShomTidalClient(api_key=api_key)
     return HarmonicTidalModel()
 
@@ -192,7 +196,9 @@ def plan(
     from_port: str = typer.Option(..., "--from", help="Departure port or lat/lon"),
     to_port: str = typer.Option(..., "--to", help="Destination port or lat/lon"),
     depart: str = typer.Option(..., "--depart", help="Departure time (ISO 8601)"),
-    wind: str = typer.Option(..., "--wind", help="Wind direction/speed (e.g. 240/15)"),
+    wind: str | None = typer.Option(
+        None, "--wind", help="Wind direction/speed (e.g. 240/15)"
+    ),
     step: int = typer.Option(15, "--step", help="Time step in minutes (1,5,15,30,60)"),
     max_wind: float | None = typer.Option(
         None, "--max-wind", help="Max wind speed (kn)", min=0.0
@@ -243,13 +249,31 @@ def plan(
         )
         raise typer.Exit(1)
 
-    wind_condition = _parse_wind(wind, departure_time)
-    if wind_condition is None:
-        typer.echo(
-            f"✗ Invalid wind format: {wind!r}. Expected DIR/SPD (e.g. 240/15)",
-            err=True,
-        )
-        raise typer.Exit(1)
+    weather_provider = None
+    wind_source: str | None = None
+
+    if wind is None:
+        from voyageur.weather.openmeteo import OpenMeteoClient
+
+        _wc = OpenMeteoClient()
+        try:
+            wind_condition = _wc.get_wind(origin[0], origin[1], departure_time)
+        except (OSError, ValueError):
+            typer.echo(
+                "✗ Weather forecast unavailable — provide --wind manually",
+                err=True,
+            )
+            raise typer.Exit(1)
+        weather_provider = _wc
+        wind_source = "OpenMeteo"
+    else:
+        wind_condition = _parse_wind(wind, departure_time)
+        if wind_condition is None:
+            typer.echo(
+                f"✗ Invalid wind format: {wind!r}. Expected DIR/SPD (e.g. 240/15)",
+                err=True,
+            )
+            raise typer.Exit(1)
 
     boat, loaded, boat_thresholds = _load_boat()
     if draft is not None:
@@ -331,6 +355,12 @@ def plan(
             )
         criteria_list = raw
 
+    if optimize_departure and criteria_list is not None:
+        typer.echo(
+            "✗ --optimize-departure and --criteria are mutually exclusive", err=True
+        )
+        raise typer.Exit(1)
+
     cartography = GeoJsonCartography()
     tidal = _build_tidal_provider()
 
@@ -377,7 +407,11 @@ def plan(
         else:
             rec_line = f"Optimal departure: {opt_hhmm} — no improvement vs {base_hhmm}"
         typer.echo(rec_line)
-        typer.echo(format_timeline(result.optimal_route, wind=wind_condition))
+        typer.echo(
+            format_timeline(
+                result.optimal_route, wind=wind_condition, wind_source=wind_source
+            )
+        )
     elif criteria_list is not None:
         multi = MultiCriteriaRoutePlanner(tidal=tidal, cartography=cartography)
         results = multi.compute_all(
@@ -391,16 +425,18 @@ def plan(
         )
         for route in results.values():
             evaluate_route(route, wind_condition, thresholds)
-        first_route = next(iter(results.values()))
-        if len(first_route.waypoints) > 0 and all(
-            wp.flagged for wp in first_route.waypoints
+        if results and all(
+            len(route.waypoints) > 0 and all(wp.flagged for wp in route.waypoints)
+            for route in results.values()
         ):
             typer.echo(
                 "✗ No viable conditions — all segments exceed safety thresholds.",
                 err=True,
             )
             raise typer.Exit(1)
-        typer.echo(format_multi_criteria(results, wind=wind_condition))
+        typer.echo(
+            format_multi_criteria(results, wind=wind_condition, wind_source=wind_source)
+        )
     else:
         planner = IsochroneRoutePlanner(tidal=tidal, cartography=cartography)
         route = planner.compute(
@@ -410,6 +446,7 @@ def plan(
             wind=wind_condition,
             boat=boat,
             step_minutes=step,
+            weather=weather_provider,
         )
         flag_count = evaluate_route(route, wind_condition, thresholds)
         if flag_count > 0 and flag_count == len(route.waypoints):
@@ -434,7 +471,7 @@ def plan(
                 " — check your passage plan.",
                 err=True,
             )
-        typer.echo(format_timeline(route, wind=wind_condition))
+        typer.echo(format_timeline(route, wind=wind_condition, wind_source=wind_source))
 
 
 @app.command("replan")
@@ -446,7 +483,9 @@ def replan(
     current_time_str: str = typer.Option(
         ..., "--time", help="Current time (ISO 8601)"
     ),
-    wind: str = typer.Option(..., "--wind", help="Wind direction/speed (e.g. 240/15)"),
+    wind: str | None = typer.Option(
+        None, "--wind", help="Wind direction/speed (e.g. 240/15)"
+    ),
     step: int = typer.Option(15, "--step", help="Time step in minutes (1,5,15,30,60)"),
     max_wind: float | None = typer.Option(
         None, "--max-wind", help="Max wind speed (kn)", min=0.0
@@ -489,13 +528,31 @@ def replan(
         )
         raise typer.Exit(1)
 
-    wind_condition = _parse_wind(wind, current_time)
-    if wind_condition is None:
-        typer.echo(
-            f"✗ Invalid wind format: {wind!r}. Expected DIR/SPD (e.g. 240/15)",
-            err=True,
-        )
-        raise typer.Exit(1)
+    weather_provider = None
+    wind_source: str | None = None
+
+    if wind is None:
+        from voyageur.weather.openmeteo import OpenMeteoClient
+
+        _wc = OpenMeteoClient()
+        try:
+            wind_condition = _wc.get_wind(origin[0], origin[1], current_time)
+        except (OSError, ValueError):
+            typer.echo(
+                "✗ Weather forecast unavailable — provide --wind manually",
+                err=True,
+            )
+            raise typer.Exit(1)
+        weather_provider = _wc
+        wind_source = "OpenMeteo"
+    else:
+        wind_condition = _parse_wind(wind, current_time)
+        if wind_condition is None:
+            typer.echo(
+                f"✗ Invalid wind format: {wind!r}. Expected DIR/SPD (e.g. 240/15)",
+                err=True,
+            )
+            raise typer.Exit(1)
 
     boat, loaded, boat_thresholds = _load_boat()
     if draft is not None:
@@ -564,16 +621,18 @@ def replan(
         )
         for route in results.values():
             evaluate_route(route, wind_condition, thresholds)
-        first_route = next(iter(results.values()))
-        if len(first_route.waypoints) > 0 and all(
-            wp.flagged for wp in first_route.waypoints
+        if results and all(
+            len(route.waypoints) > 0 and all(wp.flagged for wp in route.waypoints)
+            for route in results.values()
         ):
             _handle_no_viable(
                 origin, destination, current_time, wind_condition, boat,
                 tidal, cartography, thresholds, step,
             )
             raise typer.Exit(1)
-        typer.echo(format_multi_criteria(results, wind=wind_condition))
+        typer.echo(
+            format_multi_criteria(results, wind=wind_condition, wind_source=wind_source)
+        )
     else:
         route = IsochroneRoutePlanner(tidal=tidal, cartography=cartography).compute(
             origin=origin,
@@ -582,6 +641,7 @@ def replan(
             wind=wind_condition,
             boat=boat,
             step_minutes=step,
+            weather=weather_provider,
         )
         flag_count = evaluate_route(route, wind_condition, thresholds)
         if flag_count > 0 and flag_count == len(route.waypoints):
@@ -606,4 +666,6 @@ def replan(
                 " — check your passage plan.",
                 err=True,
             )
-        typer.echo(format_timeline(route, wind=wind_condition))
+        typer.echo(
+            format_timeline(route, wind=wind_condition, wind_source=wind_source)
+        )

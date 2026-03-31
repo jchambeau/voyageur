@@ -80,11 +80,47 @@
 - Mutation `evaluate_route` sans option immutable [routing/safety.py] — documenté dans docstring ; unique appelant en CLI ; mode copy-on-eval = amélioration future si evaluate_route est réutilisé en dehors du CLI
 - Route origin=dest flaguée → Exit(1) quand 1 waypoint + threshold dépassé — correct per AC4 ; comportement surprenant mais spec-correct
 
+## Deferred from: code review of 5-1-shom-tidal-api-client (2026-03-31)
+
+- `httpx.Client` jamais fermé dans `ShomTidalClient.__init__` [shom_client.py:23] — CLI process court ; `ResourceWarning` théorique ; gestion explicite (.close() ou context manager) = Story 5.x
+- Datetime naïf passé à `at.isoformat()` sans timezone [shom_client.py:36] — pre-existing ; validation UTC = frontière CLI (Story 2.4, déjà déféré)
+- API key présente dans les params dict httpx — visible dans les tracebacks d'exception [shom_client.py:36] — risque sécurité faible, hors scope MVP ; httpx ne sérialise pas les params dans les exceptions par défaut
+- `capsys: object` type hint avec `# type: ignore[attr-defined]` [tests/test_tidal.py:129] — fonctionne correctement ; amélioration style = `pytest.CaptureFixture[str]` si mypy ajouté
+- `http_client: httpx.Client | None` annotation trop stricte pour l'injection de mocks [shom_client.py:20] — fonctionne à runtime (duck-typing) ; correction = Protocol ou `Any` si type-checking strict requis
+
 ## Deferred from: code review of 4-3 + 4-4 (2026-03-31)
 
 - ~~`DepartureResult.time_saved` peut être négatif~~ — **FIXED** (`max(..., timedelta(0))` dans `departure.py`)
 - ~~`baseline_departure` non validée contre `window_start`/`window_end` dans `OptimalDeparturePlanner.scan`~~ — **FIXED** (`warnings.warn(UserWarning)` si `baseline ∈ [window_start, window_end]`)
 - ~~Fenêtre plus courte que `scan_interval_minutes` sans avertissement~~ — **FIXED** (warning `⚠ --window shorter than 30-minute scan interval` dans `cli/main.py`)
+
+## Deferred from: code review of 5-2-weather-forecast-api-client (2026-04-01)
+
+- `httpx.Client` jamais fermé dans `OpenMeteoClient.__init__` [openmeteo.py:13] — CLI one-shot, bénin ; gestion explicite = Story 5.x
+- `except Exception` trop large dans le bloc forecast CLI [main.py:261] — avale les bugs de programmation ; narrowing = amélioration future
+- Fenêtre forecast 24h peut ne pas couvrir les longs passages (staleness silencieuse) [openmeteo.py:31] — Norman coast passages < 20h, risque faible pour MVP
+- `at.date()` dans `_fetch` sensible au timezone [openmeteo.py:30] — latent ; CLI normalise toujours en UTC via `_parse_depart` ; à corriger si `OpenMeteoClient` est utilisé hors CLI
+
+## Deferred from: cross-epic review (2026-04-01)
+
+- OpenMeteoClient cache position-agnostic — fetchs depuis le point de départ uniquement ; acceptable Norman coast MVP (< 100 km)
+- Fenêtre forecast 24h (+1 day) peut ne pas couvrir les très longs passages ; staleness sans borne dans `min()` nearest-sample
+- Guards naive datetime manquants dans HarmonicTidalModel, ShomTidalClient, Waypoint, WindCondition — `_parse_depart` normalise en UTC ; `__post_init__` sur dataclasses reporté (risque de casser les tests existants)
+- WeatherProvider sans implémentation de fallback — asymétrie architecturale avec TidalProvider ; un `ConstantWindProvider` est une story future
+- BoatProfile non frozen + champs numériques sans validation — `frozen=True` + `__post_init__` reporté pour éviter une revue tests complète
+- MultiCriteriaRoutePlanner et OptimalDeparturePlanner sans param `weather` — explicitly out-of-scope story 5.2 ; story 6.x "Dynamic weather for all planners"
+- evaluate_route vérifie `wind.speed` global plutôt que par waypoint — nécessite ajout `wind_speed` dans `Waypoint` ; refactoring modèle, story 6.x
+- Waypoint d'arrivée enregistre heading/sog de l'étape précédente (cosmétique, pré-existant depuis story 2.2)
+- Segment COG (avec courant de marée) non vérifié contre la terre — l'algo teste le heading, le bateau navigue sur le COG ; limitation algorithmique pré-existante
+- scan avec fenêtre < interval retourne un seul point sans signal d'erreur au niveau planner (CLI avertit déjà)
+- MultiCriteria itère les 13 candidats de cap exhaustivement — jusqu'à 4× plus de calls cartographie qu'isochrone ; optimisation future
+- evaluate_route mutation in-place des waypoints — aucun appelant actuel ne double-appelle sur le même objet ; reporter si évaluation multi-threshold ajoutée
+- OptimalDeparturePlanner couplage interne fort (IsochroneRoutePlanner instancié localement) — breaking change pour ajouter weather ; story 6.x
+- _polar_fraction discontinuité à TWA=45° (frontière no-go zone) — cohérent en interne, convention sailing discutable mais sans impact fonctionnel MVP
+- ShomTidalClient message "API unavailable" trompeur quand float() échoue sur valeur non-numérique — cosmétique, comportement opérationnel correct
+- httpx.Client resource leak dans ShomTidalClient et OpenMeteoClient — CLI one-shot, bénin ; __del__ ou close() = story 5.x
+- voyageur config ne permet pas de setter max_wind_kn/max_current_kn via CLI — feature gap ; story config v2
+- replan asymétries plan/replan (next-dep scan, _handle_no_viable) — design intentionnel pour contexte underway vs planning
 
 ## Deferred from: code review of 3-3-boat-profile-management (2026-03-30)
 

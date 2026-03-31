@@ -1,6 +1,6 @@
 # Story 5.1: SHOM Tidal API Client
 
-Status: review
+Status: done
 
 ## Story
 
@@ -53,6 +53,19 @@ so that my route calculations use authoritative French hydrographic data without
 - [x] Valider (AC: 6)
   - [x] `poetry run ruff check voyageur/ tests/`
   - [x] `poetry run pytest tests/ -v`
+
+### Review Findings
+
+- [x] [Review][Patch] `except Exception` trop large — swallows `KeyError` sur schema invalide, émet "API unavailable" à tort [shom_client.py:48] — **High** — distinguer `httpx.HTTPError` (réseau), `httpx.HTTPStatusError` (non-2xx), `(KeyError, ValueError, TypeError)` (schema) avec messages distincts
+- [x] [Review][Patch] `_build_tidal_provider` return type `object` devrait être `TidalProvider` [cli/main.py:141] — **Low** — perd la vérification statique du Protocol aux call sites
+- [x] [Review][Patch] Test manquant pour chemin non-2xx (`raise_for_status` lève `httpx.HTTPStatusError`) [tests/test_tidal.py] — **Low** — AC5 cite trois failure modes, seul `Exception("timeout")` est couvert
+- [x] [Review][Patch] Guard `isinstance(api_key, str)` absent dans `_build_tidal_provider` [cli/main.py:147] — **Low** — valeur YAML non-string (int, bool) passerait à `ShomTidalClient` sans erreur
+- [x] [Review][Patch] `_load_voyageur_config` swallows `OSError` silencieusement — aucun warning si config illisible [cli/main.py:137] — **Low** — utilisateur a configuré la clé mais ne sait pas que le fichier est illisible
+- [x] [Review][Defer] `httpx.Client` jamais fermé [shom_client.py:23] — deferred, CLI process court (cosmétique)
+- [x] [Review][Defer] Datetime naïf passé à `at.isoformat()` sans timezone [shom_client.py:36] — deferred, pre-existing — validation = frontière CLI (Story 2.4)
+- [x] [Review][Defer] API key dans params dict, visible dans tracebacks httpx [shom_client.py:36] — deferred, risque sécurité hors scope MVP
+- [x] [Review][Defer] `capsys: object` type hint — `readouterr()` avec type: ignore [tests/test_tidal.py:129] — deferred, fonctionne, style seulement
+- [x] [Review][Defer] `http_client: httpx.Client | None` annotation trop stricte pour injection de mock [shom_client.py:20] — deferred, minor type issue, fonctionne à runtime
 
 ## Dev Notes
 

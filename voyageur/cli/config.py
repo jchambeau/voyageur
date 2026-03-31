@@ -54,19 +54,17 @@ def manage(
         raise typer.Exit(1)
 
     existing = _load_existing()
-    merged = {
-        "name": name if name is not None else existing.get("name", "Default"),
-        "loa": loa if loa is not None else existing.get("loa", 12.0),
-        "draft": draft if draft is not None else existing.get("draft", 1.8),
-        "sail_area": (
-            sail_area if sail_area is not None else existing.get("sail_area", 65.0)
-        ),
-        "default_step": (
-            default_step
-            if default_step is not None
-            else existing.get("default_step", 15)
-        ),
-    }
+    # Start from all existing keys (preserves max_wind_kn, max_current_kn, etc.)
+    merged = dict(existing)
+    merged["name"] = name if name is not None else existing.get("name", "Default")
+    merged["loa"] = loa if loa is not None else existing.get("loa", 12.0)
+    merged["draft"] = draft if draft is not None else existing.get("draft", 1.8)
+    merged["sail_area"] = (
+        sail_area if sail_area is not None else existing.get("sail_area", 65.0)
+    )
+    merged["default_step"] = (
+        default_step if default_step is not None else existing.get("default_step", 15)
+    )
 
     path = _profile_path()
     path.parent.mkdir(parents=True, exist_ok=True)

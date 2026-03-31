@@ -1,6 +1,8 @@
 """Tests for the CLI plan command — Story 2.4 & boat profile — Story 3.3."""
+import datetime
 import pathlib
 
+import httpx
 import pytest
 import yaml
 from typer.testing import CliRunner
@@ -160,6 +162,76 @@ def test_replan_invalid_port_exits_1(runner: CliRunner) -> None:
     )
     assert result.exit_code == 1
     assert "✗" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Weather forecast — Story 5.2
+# ---------------------------------------------------------------------------
+
+UTC = datetime.timezone.utc
+_FAKE_WIND_DIRECTION = 240.0
+_FAKE_WIND_SPEED = 15.0
+
+
+def _make_fake_openmeteo_client(
+    direction: float = _FAKE_WIND_DIRECTION, speed: float = _FAKE_WIND_SPEED
+):
+    """Return a fake OpenMeteoClient class for monkeypatching."""
+    from voyageur.models import WindCondition
+
+    class _FakeOpenMeteoClient:
+        def __init__(self, http_client=None) -> None:
+            pass
+
+        def get_wind(
+            self, lat: float, lon: float, at: datetime.datetime
+        ) -> WindCondition:
+            return WindCondition(timestamp=at, direction=direction, speed=speed)
+
+    return _FakeOpenMeteoClient
+
+
+def test_plan_forecast_happy_path(runner: CliRunner, monkeypatch) -> None:
+    """plan without --wind fetches forecast; output contains 'forecast (OpenMeteo)'."""
+    import voyageur.weather.openmeteo as _owm
+
+    monkeypatch.setattr(_owm, "OpenMeteoClient", _make_fake_openmeteo_client())
+    result = runner.invoke(
+        app,
+        [
+            "plan",
+            "--from", "cherbourg",
+            "--to", "granville",
+            "--depart", UTC_ISO,
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "forecast (OpenMeteo)" in result.output
+
+
+def test_plan_forecast_unavailable_exits_1(runner: CliRunner, monkeypatch) -> None:
+    """plan without --wind exits 1 with error message when API unavailable."""
+    import voyageur.weather.openmeteo as _owm
+
+    class _FailingClient:
+        def __init__(self, http_client=None) -> None:
+            pass
+
+        def get_wind(self, lat: float, lon: float, at: datetime.datetime):
+            raise httpx.ConnectError("unreachable")
+
+    monkeypatch.setattr(_owm, "OpenMeteoClient", _FailingClient)
+    result = runner.invoke(
+        app,
+        [
+            "plan",
+            "--from", "cherbourg",
+            "--to", "granville",
+            "--depart", UTC_ISO,
+        ],
+    )
+    assert result.exit_code == 1
+    assert "Weather forecast unavailable" in result.output
 
 
 def test_plan_draft_override(

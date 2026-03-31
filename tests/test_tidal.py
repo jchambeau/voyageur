@@ -128,12 +128,47 @@ def test_shom_client_happy_path(now: datetime.datetime) -> None:
 def test_shom_client_fallback_on_error(
     now: datetime.datetime, capsys: object
 ) -> None:
+    import httpx
+
     client = ShomTidalClient(
         api_key="test-key",
-        http_client=_MockHttpClient(raise_error=Exception("timeout")),
+        http_client=_MockHttpClient(
+            raise_error=httpx.ConnectError("Connection refused")
+        ),
     )
     result = client.get_current(lat=CHERBOURG[0], lon=CHERBOURG[1], at=now)
     assert isinstance(result, TidalState)
     assert result.current_speed >= 0.0
+    captured = capsys.readouterr()  # type: ignore[attr-defined]
+    assert "⚠ SHOM API unavailable" in captured.err
+
+
+def test_shom_client_fallback_on_http_status_error(
+    now: datetime.datetime, capsys: object
+) -> None:
+    """Non-2xx response (raise_for_status path) triggers fallback."""
+    import httpx
+
+    class _ErrorResponse:
+        def raise_for_status(self) -> None:
+            raise httpx.HTTPStatusError(
+                "403 Forbidden",
+                request=httpx.Request("GET", "http://test"),
+                response=httpx.Response(403),
+            )
+
+        def json(self) -> dict:
+            return {}
+
+    class _StatusErrorClient:
+        def get(self, url: str, **kwargs) -> _ErrorResponse:
+            return _ErrorResponse()
+
+    client = ShomTidalClient(
+        api_key="test-key",
+        http_client=_StatusErrorClient(),
+    )
+    result = client.get_current(lat=CHERBOURG[0], lon=CHERBOURG[1], at=now)
+    assert isinstance(result, TidalState)
     captured = capsys.readouterr()  # type: ignore[attr-defined]
     assert "⚠ SHOM API unavailable" in captured.err

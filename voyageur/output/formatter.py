@@ -69,16 +69,23 @@ def _fmt_duration(td: datetime.timedelta) -> str:
 def format_multi_criteria(
     results: dict[str, Route],
     wind: WindCondition | None = None,
+    wind_source: str | None = None,
 ) -> str:
     """Format multiple routes, one labelled section per criterion."""
     sections = []
     for label, route in results.items():
         header = f"=== {label.upper()} ==="
-        sections.append(header + "\n" + format_timeline(route, wind))
+        sections.append(
+            header + "\n" + format_timeline(route, wind, wind_source=wind_source)
+        )
     return "\n\n".join(sections)
 
 
-def format_timeline(route: Route, wind: WindCondition | None = None) -> str:
+def format_timeline(
+    route: Route,
+    wind: WindCondition | None = None,
+    wind_source: str | None = None,
+) -> str:
     """Format a computed route as an 80-column ASCII timeline table."""
     lines: list[str] = [HEADER, DIVIDER]
     for wp in route.waypoints:
@@ -91,7 +98,7 @@ def format_timeline(route: Route, wind: WindCondition | None = None) -> str:
         if wind is not None:
             wind_col = _fmt_dir_spd(wind.direction, wind.speed)
         else:
-            wind_col = "---/---"
+            wind_col = "---/----"
         row = SEP.join([elapsed, lat, lon, hdg, sog, tide, wind_col])
         if wp.flagged:
             row = row + "  \u26a0"
@@ -101,8 +108,11 @@ def format_timeline(route: Route, wind: WindCondition | None = None) -> str:
     dist_nm = _total_distance_nm(route.waypoints)
     duration_str = _fmt_duration(route.total_duration)
     flag_count = sum(1 for wp in route.waypoints if wp.flagged)
-    lines.append(
+    summary = (
         f"Total: {dist_nm:.1f} NM  |  Duration: {duration_str}"
         f"  |  Flags: {flag_count}"
     )
+    if wind_source is not None:
+        summary += f"  |  Wind: forecast ({wind_source})"
+    lines.append(summary)
     return "\n".join(lines)

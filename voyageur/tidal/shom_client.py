@@ -45,8 +45,14 @@ class ShomTidalClient:
                 current_speed=float(data["speed"]),
                 water_height=float(data.get("height", 0.0)),
             )
-        except Exception:
+        except (httpx.HTTPError, ValueError):
             sys.stderr.write(
                 "⚠ SHOM API unavailable — using embedded harmonic model\n"
+            )
+            return self._fallback.get_current(lat, lon, at)
+        except (KeyError, TypeError):
+            sys.stderr.write(
+                "⚠ SHOM API returned unexpected response"
+                " — using embedded harmonic model\n"
             )
             return self._fallback.get_current(lat, lon, at)

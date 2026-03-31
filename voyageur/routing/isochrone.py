@@ -12,6 +12,7 @@ from voyageur.routing.planner import (
     _polar_fraction,
 )
 from voyageur.tidal.protocol import TidalProvider
+from voyageur.weather.protocol import WeatherProvider
 
 # Heading offsets tried in order: direct first, then symmetric deviations.
 _HEADING_OFFSETS: tuple[float, ...] = (
@@ -77,6 +78,7 @@ class IsochroneRoutePlanner:
         wind: WindCondition,
         boat: BoatProfile,
         step_minutes: int = 15,
+        weather: WeatherProvider | None = None,
     ) -> Route:
         """Compute a time-stepped route from origin to destination, avoiding land.
 
@@ -130,11 +132,18 @@ class IsochroneRoutePlanner:
             )
             direct_bearing = fwd_az % 360.0
 
+            # 2.5 Wind at current step (re-fetched per step if WeatherProvider set).
+            current_wind = (
+                weather.get_wind(current_lat, current_lon, current_time)
+                if weather is not None
+                else wind
+            )
+
             # 3. Boat speed from polar model (TWA relative to direct bearing).
-            twa = (wind.direction - direct_bearing) % 360.0
+            twa = (current_wind.direction - direct_bearing) % 360.0
             if twa > 180.0:
                 twa = 360.0 - twa
-            btw = wind.speed * _polar_fraction(twa)
+            btw = current_wind.speed * _polar_fraction(twa)
 
             # 4. Beam search: pick first heading whose next segment avoids land.
             heading = direct_bearing  # fallback if all candidates blocked
