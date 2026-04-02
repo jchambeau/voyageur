@@ -22,9 +22,11 @@ class OpenMeteoClient:
             self._fetch(lat, lon, at)
         if not self._forecast:
             raise ValueError("OpenMeteo returned an empty forecast")
+        # Normalize to naive for comparison (pipeline uses naive datetimes).
+        naive_at = at.replace(tzinfo=None) if at.tzinfo is not None else at
         return min(
             self._forecast,
-            key=lambda w: abs((w.timestamp - at).total_seconds()),
+            key=lambda w: abs((w.timestamp - naive_at).total_seconds()),
         )
 
     def _fetch(self, lat: float, lon: float, at: datetime.datetime) -> None:
@@ -51,9 +53,7 @@ class OpenMeteoClient:
             directions = data["hourly"]["winddirection_10m"]
             self._forecast = [
                 WindCondition(
-                    timestamp=datetime.datetime.fromisoformat(t).replace(
-                        tzinfo=datetime.timezone.utc
-                    ),
+                    timestamp=datetime.datetime.fromisoformat(t),
                     direction=float(d),
                     speed=float(s),
                 )

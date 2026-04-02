@@ -50,6 +50,14 @@ def test_80_col_constraint(sample_route, now):
         assert len(line) <= 80, f"Line {i} exceeds 80 cols ({len(line)}): {line!r}"
 
 
+def test_80_col_constraint_with_wind_source(sample_route, now):
+    """Summary line with wind_source must also stay ≤ 80 chars."""
+    wind = WindCondition(timestamp=now, direction=240.0, speed=15.0)
+    output = format_timeline(sample_route, wind=wind, wind_source="OpenMeteo")
+    for i, line in enumerate(output.splitlines()):
+        assert len(line) <= 80, f"Line {i} exceeds 80 cols ({len(line)}): {line!r}"
+
+
 # ---------------------------------------------------------------------------
 # Headers present (AC1/2)
 # ---------------------------------------------------------------------------

@@ -2,7 +2,6 @@
 import datetime
 import pathlib
 
-import httpx
 import pytest
 import yaml
 from typer.testing import CliRunner
@@ -108,6 +107,25 @@ def test_config_show_missing_profile(
     monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
     result = runner.invoke(app, ["config", "--show"])
     assert result.exit_code == 1
+
+
+def test_config_preserves_extra_keys(
+    runner: CliRunner, tmp_path: pathlib.Path, monkeypatch
+) -> None:
+    """Updating one field must not drop extra keys (e.g. max_wind_kn)."""
+    monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
+    voyageur_dir = tmp_path / ".voyageur"
+    voyageur_dir.mkdir()
+    (voyageur_dir / "boat.yaml").write_text(
+        "name: OldBoat\nloa: 12.0\ndraft: 1.8\nsail_area: 65.0\n"
+        "default_step: 15\nmax_wind_kn: 25.0\nmax_current_kn: 3.5\n"
+    )
+    result = runner.invoke(app, ["config", "--name", "NewBoat"])
+    assert result.exit_code == 0, result.output
+    data = yaml.safe_load((voyageur_dir / "boat.yaml").read_text())
+    assert data["name"] == "NewBoat"
+    assert data["max_wind_kn"] == pytest.approx(25.0)
+    assert data["max_current_kn"] == pytest.approx(3.5)
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +236,8 @@ def test_plan_forecast_unavailable_exits_1(runner: CliRunner, monkeypatch) -> No
             pass
 
         def get_wind(self, lat: float, lon: float, at: datetime.datetime):
-            raise httpx.ConnectError("unreachable")
+            # _fetch now wraps httpx errors as ValueError
+            raise ValueError("OpenMeteo forecast unavailable: Connection failed")
 
     monkeypatch.setattr(_owm, "OpenMeteoClient", _FailingClient)
     result = runner.invoke(
@@ -232,6 +251,24 @@ def test_plan_forecast_unavailable_exits_1(runner: CliRunner, monkeypatch) -> No
     )
     assert result.exit_code == 1
     assert "Weather forecast unavailable" in result.output
+
+
+def test_replan_forecast_happy_path(runner: CliRunner, monkeypatch) -> None:
+    """replan sans --wind utilise forecast OpenMeteo."""
+    import voyageur.weather.openmeteo as _owm
+
+    monkeypatch.setattr(_owm, "OpenMeteoClient", _make_fake_openmeteo_client())
+    result = runner.invoke(
+        app,
+        [
+            "replan",
+            "--from", "cherbourg",
+            "--to", "granville",
+            "--time", UTC_ISO,
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "forecast (OpenMeteo)" in result.output
 
 
 def test_plan_draft_override(

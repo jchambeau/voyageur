@@ -172,3 +172,17 @@ def test_shom_client_fallback_on_http_status_error(
     assert isinstance(result, TidalState)
     captured = capsys.readouterr()  # type: ignore[attr-defined]
     assert "⚠ SHOM API unavailable" in captured.err
+
+
+def test_shom_client_fallback_on_missing_keys(
+    now: datetime.datetime, capsys: object
+) -> None:
+    """Response missing 'direction'/'speed' keys triggers KeyError fallback."""
+    client = ShomTidalClient(
+        api_key="test-key",
+        http_client=_MockHttpClient(response_data={"height": 3.5}),
+    )
+    result = client.get_current(lat=CHERBOURG[0], lon=CHERBOURG[1], at=now)
+    assert isinstance(result, TidalState)
+    captured = capsys.readouterr()  # type: ignore[attr-defined]
+    assert "⚠ SHOM API returned unexpected response" in captured.err
