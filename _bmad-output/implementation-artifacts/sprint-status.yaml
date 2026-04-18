@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-29
-last_updated: 2026-04-01 (story 5-2 done)
+last_updated: 2026-04-15 (epics 4 & 5 done; epics 6-9 added for Web GUI)
 project: voyageur
 project_key: NOKEY
 tracking_system: file-system
@@ -65,7 +65,7 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: [Growth] Intelligent Multi-Criteria Routing
-  epic-4: in-progress
+  epic-4: done
   4-1-isochrone-grid-with-obstacle-avoidance: done
   4-2-multi-criteria-route-computation: done
   4-3-optimal-departure-time-suggestion: done
@@ -73,7 +73,38 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: [Growth] Live Data Integration
-  epic-5: in-progress
+  epic-5: done
   5-1-shom-tidal-api-client: done
   5-2-weather-forecast-api-client: done
   epic-5-retrospective: optional
+
+  # Epic 6: [GUI] Web GUI Foundation
+  epic-6: backlog
+  6-1-fastapi-app-scaffold: backlog
+  6-2-boat-profile-crud-endpoints: backlog
+  6-3-configuration-endpoint: backlog
+  6-4-svelte-frontend-scaffold: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: [GUI] Interactive Map & Route Planning
+  epic-7: backlog
+  7-1-maplibre-base-map: backlog
+  7-2-waypoint-input-via-mouse: backlog
+  7-3-route-request-websocket-streaming: backlog
+  7-4-route-summary-and-replan: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: [GUI] Timeline & Boat Profile UI
+  epic-8: backlog
+  8-1-synchronized-timeline: backlog
+  8-2-boat-profile-form: backlog
+  8-3-live-data-status-indicators: backlog
+  8-4-ascii-export: backlog
+  epic-8-retrospective: optional
+
+  # Epic 9: [GUI] Deployable Packaging
+  epic-9: backlog
+  9-1-docker-image: backlog
+  9-2-authentication: backlog
+  9-3-multi-user-profile-scope: backlog
+  epic-9-retrospective: optional

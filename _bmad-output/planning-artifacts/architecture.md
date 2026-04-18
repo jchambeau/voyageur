@@ -2,6 +2,11 @@
 stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
 status: 'complete'
 completedAt: '2026-03-28'
+lastAmendedAt: '2026-04-15'
+amendments:
+  - date: '2026-04-15'
+    section: 'GUI / Web Interface Architecture'
+    summary: 'Added web-based GUI layer (FastAPI + Svelte + MapLibre) as new presentation layer; core protocols unchanged; CLI and ASCII formatter retained for export.'
 inputDocuments: ['_bmad-output/planning-artifacts/prd.md']
 workflowType: 'architecture'
 project_name: 'voyageur'
@@ -461,3 +466,124 @@ poetry new voyageur && cd voyageur
 poetry add typer pyproj shapely
 poetry add --group dev pytest ruff
 ```
+
+## GUI / Web Interface Architecture
+
+_Section ajoutée 2026-04-15. Introduit une couche de présentation web-based en complément du CLI. Le noyau (routing, tidal, weather, boat profiles) reste inchangé — les protocoles existants (`TidalProvider`, `WeatherProvider`, etc.) sont réutilisés tels quels. Le formatter ASCII 80-col est conservé pour export._
+
+### Intent & Scope
+
+- **Objectif** : offrir une interface graphique interactive (carte, timeline, édition de profils, waypoints à la souris) en remplacement de l'usage terminal pour l'utilisateur final.
+- **Positionnement** : nouvelle **couche de présentation**, pas un remplacement du noyau. Le CLI reste disponible (scripts, debug, export ASCII).
+- **Déploiement v1** : local uniquement (single-user, pas d'auth).
+- **Déploiement v2** : containerisable, multi-user à terme — l'architecture v1 doit rendre ce chemin possible sans refonte.
+
+### Stack
+
+| Couche | Choix | Justification |
+|---|---|---|
+| Backend HTTP | **FastAPI** + Uvicorn | Python, import direct des modules noyau, typage via Pydantic, WebSocket natif |
+| Frontend | **Svelte + Vite** | Bundle léger, réactivité simple pour app mono-écran, TypeScript |
+| Carte | **MapLibre GL JS** | WebGL pour rendu fluide des isochrones/traces, tuiles OpenSeaMap/OSM libres, pas de clé |
+| Transport | **REST (CRUD) + WebSocket (streaming)** | REST pour profils/config, WebSocket pour progression calcul de route |
+| Packaging | assets Svelte pré-buildés servis en statique par FastAPI | distribution `pip install` unique, pas de serveur web séparé |
+
+### Structure du projet (ajout)
+
+```
+voyageur/
+├── src/voyageur/              # noyau inchangé — protocoles préservés (NFR4)
+│   ├── cli.py                 # conservé
+│   ├── formatter_ascii.py     # conservé pour export
+│   ├── tidal/
+│   ├── weather/
+│   ├── routing/
+│   └── models.py
+├── src/voyageur_web/          # NOUVEAU — couche présentation
+│   ├── __init__.py
+│   ├── app.py                 # FastAPI instance, montage des routes + assets
+│   ├── main.py                # CLI entry point `voyageur-web` (lance uvicorn + ouvre navigateur)
+│   ├── routes/
+│   │   ├── routes.py          # POST /api/routes (calcul), GET /api/routes/{id}
+│   │   ├── profiles.py        # CRUD /api/boat-profiles
+│   │   ├── config.py          # GET/PUT /api/config
+│   │   └── ws.py              # WS /ws/route/{id} — streaming isochrones + timeline
+│   ├── schemas.py             # Pydantic — mapping models.py ↔ JSON API
+│   └── static/                # assets Svelte buildés (web/dist)
+└── web/                       # NOUVEAU — sources frontend
+    ├── package.json
+    ├── vite.config.ts
+    ├── src/
+    │   ├── App.svelte
+    │   ├── lib/
+    │   │   ├── api.ts              # client REST typé
+    │   │   ├── ws.ts               # client WebSocket
+    │   │   └── types.ts            # miroir des schémas Pydantic
+    │   ├── components/
+    │   │   ├── Map.svelte          # MapLibre : trace, isochrones, waypoints
+    │   │   ├── Timeline.svelte     # timeline tidale/météo
+    │   │   ├── BoatProfileForm.svelte
+    │   │   └── RouteForm.svelte    # départ/arrivée/heure
+    │   └── stores/                 # état Svelte (route courante, profil actif)
+    └── dist/                       # généré par `npm run build`, copié vers src/voyageur_web/static/
+```
+
+### Contrats couche par couche
+
+- **Noyau → API** : `voyageur_web/routes/*.py` importe directement `voyageur.routing`, `voyageur.tidal`, `voyageur.weather`. Aucune duplication de logique. Les protocoles existants sont injectés via un container d'app simple (fonction factory dans `app.py`).
+- **API → Front** : schémas Pydantic dans `schemas.py` = source de vérité. `web/src/lib/types.ts` est généré (ou maintenu à la main) pour refléter ces schémas.
+- **Front → Carte** : `Map.svelte` ne connaît que des GeoJSON — toute conversion route/isochrone → GeoJSON se fait côté API ou dans `lib/api.ts`.
+
+### Communication temps réel
+
+Le calcul de route peut être long (isochrones multi-critères, appels SHOM/OpenMeteo). Le flux :
+
+1. `POST /api/routes` → accepte la requête, renvoie `{route_id, ws_url}` immédiatement
+2. Le backend lance le calcul dans une task asyncio
+3. Le front ouvre `WS /ws/route/{route_id}` et reçoit des messages typés :
+   - `{type: "isochrone", step, geojson}` — à chaque propagation
+   - `{type: "waypoint_added", ...}`
+   - `{type: "complete", route_summary}` ou `{type: "error", ...}`
+4. La carte et la timeline se mettent à jour de façon incrémentale.
+
+### Chemin de déploiement
+
+| Étape | État | Implication |
+|---|---|---|
+| v1 — local | `voyageur-web` lance uvicorn sur `127.0.0.1:8765`, ouvre le navigateur par défaut | pas d'auth, config locale `~/.voyageur/config.yaml` |
+| v2 — containerisé | Dockerfile multi-stage (build Svelte + runtime Python), variables d'env pour secrets | ajouter auth (token ou OAuth proxy), CORS configuré, logs structurés |
+| v2 — multi-user | sessionisation, isolation des profils par user | introduire un store (SQLite → Postgres), refactor `boat_profile_manager` avec scope user |
+
+L'architecture v1 rend v2 possible en gardant **toute la logique métier pure dans le noyau** (pas d'état global, protocoles injectés) et en isolant la persistance utilisateur dans `voyageur_web/`.
+
+### Dépendances ajoutées
+
+```toml
+# pyproject.toml — group "web"
+fastapi = "^0.115"
+uvicorn = {extras = ["standard"], version = "^0.32"}
+websockets = "^13"
+pydantic = "^2"
+```
+
+```json
+// web/package.json — extraits
+"svelte": "^5",
+"vite": "^5",
+"maplibre-gl": "^4",
+"typescript": "^5"
+```
+
+### Impact sur les décisions existantes
+
+- **Protocoles (NFR4)** : inchangés. La GUI est un consommateur de plus, au même titre que le CLI.
+- **Formatter ASCII 80-col** : conservé, exposé via `GET /api/routes/{id}/export?format=ascii` pour export téléchargeable.
+- **Boat profiles** : le manager existant reste seule source de vérité ; l'API le wrap.
+- **Tests** : ajouter `tests/test_web/` avec `TestClient` FastAPI (mocks HTTP pour SHOM/OpenMeteo déjà en place).
+
+### Nouveaux épics suggérés
+
+- **Épic 6 — Web GUI Foundation** : FastAPI app, routes CRUD profils/config, Svelte scaffold, build pipeline.
+- **Épic 7 — Interactive Map & Route Planning** : MapLibre, saisie waypoints, calcul de route via WS, affichage isochrones.
+- **Épic 8 — Timeline & Boat Profile UI** : timeline tidale/météo, formulaire profils, intégration live data.
+- **Épic 9 — Deployable Packaging** : Dockerfile, auth, config multi-user (v2).

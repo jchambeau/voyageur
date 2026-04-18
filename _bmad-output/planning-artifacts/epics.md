@@ -134,6 +134,20 @@ JC peut comparer plusieurs routes optimisées selon différents critères, recev
 Le système récupère automatiquement les données de marée et météo réelles, remplaçant les paramètres saisis manuellement.
 **FRs covered:** FR29, FR30, FR31
 
+### Epic 6: [GUI] Fondation de l'interface web
+Mise en place de la couche de présentation web : backend FastAPI, scaffold Svelte, pipeline de build, CRUD des profils bateau et de la configuration. Aucune carte ni calcul interactif à ce stade — on vérifie que la nouvelle couche expose proprement le noyau existant via HTTP.
+**Architectural refs:** voir section `GUI / Web Interface Architecture` dans `architecture.md`
+
+### Epic 7: [GUI] Carte interactive & planification de route
+Intégration MapLibre, saisie de waypoints à la souris, calcul de route déclenché depuis l'UI, streaming progressif des isochrones via WebSocket, affichage de la trace finale.
+**Architectural refs:** flux REST+WebSocket documenté dans `architecture.md`
+
+### Epic 8: [GUI] Timeline & édition du profil bateau
+Timeline graphique (marée, vent, vitesse, cap) synchronisée avec la carte, formulaire d'édition du profil bateau, intégration live data (SHOM/OpenMeteo) dans l'UI. Export ASCII téléchargeable via l'endpoint dédié.
+
+### Epic 9: [GUI] Packaging déployable
+Dockerfile multi-stage (build Svelte + runtime Python), authentification (token ou OAuth proxy), configuration multi-user, refactor de la persistance des profils avec scope utilisateur. Ouvre la voie à un déploiement hébergé.
+
 <!-- Repeat for each epic in epics_list (N = 1, 2, 3...) -->
 
 ## Epic 1: Project Foundation & Module Contracts
@@ -421,3 +435,252 @@ So that I no longer need to enter wind conditions manually and my route reflects
 **And** if the API is unavailable and no `--wind` flag is provided, the command exits with a `✗` error asking the user to provide `--wind` manually
 **And** `tests/test_cli.py` passes: weather integration tested with mocked HTTP responses; fallback error tested
 **And** `make lint` reports no violations on relevant modules
+
+## Epic 6: Web GUI Foundation
+
+Lay the groundwork for a web-based presentation layer: a FastAPI backend that wraps the existing core modules, a Svelte scaffold with build pipeline, and CRUD endpoints for boat profiles and configuration. No map or route calculation yet — this epic verifies that the new layer exposes the core cleanly over HTTP.
+
+### Story 6.1: FastAPI App Scaffold
+
+As a developer,
+I want a FastAPI application that boots via a `voyageur-web` CLI entry point and serves a health endpoint,
+So that we have a running backend process into which subsequent routes can be added.
+
+**Acceptance Criteria:**
+
+**Given** dependencies `fastapi`, `uvicorn`, `websockets` are installed in a `web` Poetry group
+**When** I run `voyageur-web`
+**Then** Uvicorn starts on `127.0.0.1:8765` and the default browser opens that URL
+**And** `GET /api/health` returns `{"status": "ok", "version": <pkg version>}` with 200
+**And** `src/voyageur_web/` exists with `app.py`, `main.py`, and an empty `routes/` package
+**And** `tests/test_web/test_health.py` passes using FastAPI `TestClient`
+**And** `make lint` reports no violations on `voyageur_web/`
+
+### Story 6.2: Boat Profile CRUD Endpoints
+
+As the GUI,
+I want REST endpoints to list, create, update, and delete boat profiles,
+So that the UI can manage profiles without shelling out to the CLI.
+
+**Acceptance Criteria:**
+
+**Given** the existing boat profile manager from Epic 3
+**When** the client calls `GET /api/boat-profiles`
+**Then** it returns all profiles as JSON, shape defined in `schemas.py` (Pydantic)
+**And** `POST /api/boat-profiles` creates a profile, returns 201 with the created resource
+**And** `PUT /api/boat-profiles/{name}` updates it, returns 200
+**And** `DELETE /api/boat-profiles/{name}` removes it, returns 204
+**And** the underlying store is the same one used by the CLI — no duplication of logic
+**And** `tests/test_web/test_profiles.py` covers happy paths and 404/409 cases
+**And** `make lint` passes
+
+### Story 6.3: Configuration Endpoint
+
+As the GUI,
+I want to read and write the user configuration (`~/.voyageur/config.yaml`),
+So that API keys (SHOM) and preferences can be managed from the UI.
+
+**Acceptance Criteria:**
+
+**Given** a config file at `~/.voyageur/config.yaml`
+**When** the client calls `GET /api/config`
+**Then** it returns the current config as JSON, with secret fields (API keys) masked (`"***"`) in the response
+**And** `PUT /api/config` accepts a partial config patch and merges it, preserving unchanged keys
+**And** writing an invalid config returns 422 with a field-level error list
+**And** `tests/test_web/test_config.py` passes, including masking and partial update cases
+**And** `make lint` passes
+
+### Story 6.4: Svelte Frontend Scaffold & Static Serving
+
+As a developer,
+I want a Svelte + Vite project in `web/` whose build output is served by FastAPI,
+So that a single `pip install voyageur` delivers both the API and the UI without a separate web server.
+
+**Acceptance Criteria:**
+
+**Given** Node and npm are available in the dev environment
+**When** I run `npm --prefix web install && npm --prefix web run build`
+**Then** assets are produced in `web/dist/` and copied (via a Makefile target) to `src/voyageur_web/static/`
+**And** FastAPI mounts that directory at `/` so that visiting the root URL loads the Svelte app
+**And** the initial app renders a header and a "Profiles" page that successfully calls `GET /api/boat-profiles`
+**And** a typed API client exists in `web/src/lib/api.ts`
+**And** `make build-web` performs install + build + copy in one command
+
+## Epic 7: Interactive Map & Route Planning
+
+Give the UI its core workflow: display a nautical map, let the user place waypoints, trigger a route calculation from the browser, and watch isochrones appear progressively as the backend computes.
+
+### Story 7.1: MapLibre Base Map
+
+As JC,
+I want an interactive nautical map rendered with MapLibre GL JS,
+So that I have a visual canvas on which to plan routes.
+
+**Acceptance Criteria:**
+
+**Given** the Svelte app loads
+**When** I navigate to the map view
+**Then** a MapLibre map renders centred on the Normandy coast with OpenSeaMap / OSM tiles
+**And** pan, zoom, and rotate interactions work smoothly
+**And** no API keys are required for tile access
+**And** `Map.svelte` is self-contained: it exposes a readable/writable waypoints store
+**And** the map component has a component test (Vitest) verifying mount and tile source configuration
+
+### Story 7.2: Waypoint Input via Mouse
+
+As JC,
+I want to click on the map to place waypoints (origin, destination, intermediate),
+So that I can define a route visually instead of typing coordinates.
+
+**Acceptance Criteria:**
+
+**Given** the map is loaded
+**When** I click on the map
+**Then** a waypoint marker is placed at that position and added to the waypoints store
+**And** I can drag markers to reposition them
+**And** I can right-click a marker to delete it
+**And** the list of waypoints is visible alongside the map with lat/lon values
+**And** a "Plan route" button is enabled only when at least origin and destination exist
+
+### Story 7.3: Route Request & WebSocket Streaming
+
+As JC,
+I want route calculation to start when I click "Plan route" and see isochrones appear progressively,
+So that long computations give visible feedback instead of a frozen UI.
+
+**Acceptance Criteria:**
+
+**Given** valid origin + destination waypoints and a departure time
+**When** I click "Plan route"
+**Then** the UI calls `POST /api/routes` with the request payload and receives `{route_id, ws_url}`
+**And** it opens a WebSocket on `ws_url` and handles messages: `isochrone`, `waypoint_added`, `complete`, `error`
+**And** each `isochrone` message adds/updates a GeoJSON layer on the map
+**And** the final route trace is displayed on `complete` with a summary panel (total duration, distance)
+**And** backend-side, the existing routing module is invoked unchanged (NFR4) — only a thin adapter in `voyageur_web/routes/routes.py`
+**And** `tests/test_web/test_routes.py` covers the REST endpoint with a mocked routing engine
+**And** a frontend integration test verifies WS message handling with a fake server
+
+### Story 7.4: Route Summary & Re-plan
+
+As JC,
+I want a summary panel showing the computed route's key metrics and a button to re-plan from my current position,
+So that I can act on live conditions without leaving the map.
+
+**Acceptance Criteria:**
+
+**Given** a completed route is displayed
+**When** I view the summary panel
+**Then** it shows total duration, distance, average SOG, and any safety warnings from Epic 3
+**And** a "Re-plan from here" button lets me drop a new origin on the map and recompute
+**And** the underlying re-plan logic from story 4.4 is reused unchanged
+
+## Epic 8: Timeline & Boat Profile UI
+
+Round out the interactive experience with a synchronized timeline and UI-driven editing of boat profiles. Expose live data status and ASCII export.
+
+### Story 8.1: Synchronized Timeline
+
+As JC,
+I want a graphical timeline showing tidal state, wind, SOG, and heading over the route,
+So that I can scrub through the passage and see conditions evolve.
+
+**Acceptance Criteria:**
+
+**Given** a computed route is loaded
+**When** the timeline is displayed below the map
+**Then** it shows stacked tracks for: tidal current (direction+speed), wind (direction+speed), SOG, heading
+**And** hovering on the timeline highlights the corresponding waypoint on the map
+**And** hovering on a waypoint on the map highlights the timeline position
+**And** the timeline width adapts to the route duration and supports horizontal scrolling for long passages
+
+### Story 8.2: Boat Profile Form
+
+As JC,
+I want a form to create and edit boat profiles from the UI,
+So that I don't need to edit YAML or use the CLI.
+
+**Acceptance Criteria:**
+
+**Given** the profiles page is loaded
+**When** I click "New profile" or edit an existing one
+**Then** a form presents fields matching `BoatProfile` (name, LOA, draft, sail area, default step)
+**And** field-level validation is driven by the Pydantic schema from `/api/boat-profiles`
+**And** saving calls the CRUD endpoints from Epic 6 and refreshes the list
+**And** a profile can be set as "active" for route planning
+
+### Story 8.3: Live Data Status Indicators
+
+As JC,
+I want the UI to show which data sources are in use (SHOM vs harmonic fallback, OpenMeteo vs manual wind),
+So that I know whether my route relies on authoritative live data or degraded inputs.
+
+**Acceptance Criteria:**
+
+**Given** a route has been computed
+**When** I view the route summary
+**Then** badges show the tidal source ("SHOM" or "harmonic fallback" with ⚠) and wind source ("OpenMeteo", "Météo-France", or "manual")
+**And** if a fallback was triggered, the reason is visible on hover (e.g. "SHOM API unavailable at 14:03")
+
+### Story 8.4: ASCII Export
+
+As JC,
+I want to download the ASCII 80-column timeline for the current route,
+So that I can print it or share it via text channels.
+
+**Acceptance Criteria:**
+
+**Given** a completed route
+**When** I click "Export ASCII"
+**Then** the browser downloads a `.txt` file via `GET /api/routes/{id}/export?format=ascii`
+**And** the content matches what the CLI `voyageur` command produces for the same inputs byte-for-byte
+**And** the existing `formatter_ascii.py` is reused without modification (NFR4)
+
+## Epic 9: Deployable Packaging
+
+Make the web GUI deployable beyond local single-user usage: container image, authentication, and multi-user scoped persistence.
+
+### Story 9.1: Docker Image
+
+As a deployer,
+I want a multi-stage Dockerfile that builds the Svelte frontend and packages the Python backend,
+So that I can run voyageur-web as a single container.
+
+**Acceptance Criteria:**
+
+**Given** Docker is installed
+**When** I run `docker build -t voyageur-web .`
+**Then** the build completes with a final image under ~300 MB
+**And** stage 1 builds Svelte (`node:20-alpine`), stage 2 installs the Python package (`python:3.11-slim`)
+**And** `docker run -p 8765:8765 voyageur-web` starts Uvicorn and the UI is reachable on `localhost:8765`
+**And** configuration is read from env vars (e.g. `VOYAGEUR_SHOM_API_KEY`) with fallback to a mounted config file
+
+### Story 9.2: Authentication
+
+As a deployer,
+I want the web app to require authentication when not running in local mode,
+So that a deployed instance isn't open to the world.
+
+**Acceptance Criteria:**
+
+**Given** the env var `VOYAGEUR_AUTH_MODE=token` (or `oauth`) is set
+**When** a request is made without a valid token
+**Then** it receives 401
+**And** a login page (Svelte) accepts credentials and stores the session token
+**And** `VOYAGEUR_AUTH_MODE=none` (default for local `voyageur-web`) disables auth entirely
+**And** tests cover authenticated, unauthenticated, and expired-token cases
+
+### Story 9.3: Multi-User Profile Scope
+
+As a deployer,
+I want boat profiles and route history scoped per authenticated user,
+So that multiple users can share a deployed instance without data leaking.
+
+**Acceptance Criteria:**
+
+**Given** auth is enabled and at least two users exist
+**When** user A creates a profile
+**Then** user B does not see it in `GET /api/boat-profiles`
+**And** the underlying store is migrated from file-based (`~/.voyageur/`) to SQLite, with the schema including a `user_id` column
+**And** an Alembic (or equivalent) migration script exists for the schema
+**And** in local single-user mode, a default `local` user is created transparently so no UX regression occurs
+
